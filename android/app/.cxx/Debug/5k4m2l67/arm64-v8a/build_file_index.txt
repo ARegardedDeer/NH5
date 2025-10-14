@@ -1,0 +1,7 @@
+/Users/a_regarded_deer/NH5/node_modules/@react-native-async-storage/async-storage/android/build/generated/source/codegen/jni/CMakeLists.txt
+/Users/a_regarded_deer/NH5/node_modules/@react-native-google-signin/google-signin/android/build/generated/source/codegen/jni/CMakeLists.txt
+/Users/a_regarded_deer/NH5/node_modules/react-native-gesture-handler/android/build/generated/source/codegen/jni/CMakeLists.txt
+/Users/a_regarded_deer/NH5/node_modules/react-native-safe-area-context/android/src/main/jni/CMakeLists.txt
+/Users/a_regarded_deer/NH5/node_modules/react-native-screens/android/src/main/jni/CMakeLists.txt
+/Users/a_regarded_deer/NH5/node_modules/react-native-svg/android/src/main/jni/CMakeLists.txt
+/Users/a_regarded_deer/NH5/node_modules/react-native/ReactAndroid/cmake-utils/default-app-setup/CMakeLists.txt

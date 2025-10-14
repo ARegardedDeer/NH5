@@ -1,36 +1,66 @@
-import React from 'react';
-import { View, Text, FlatList, ActivityIndicator, Image } from 'react-native';
-import { useAnimeList } from '../hooks/useAnimeList';
+import React, { useEffect, useState, useCallback } from 'react';
+import { View, Text, FlatList, ActivityIndicator, Image, RefreshControl } from 'react-native';
+import { supabase } from '../../../db/supabaseClient';
+
+type Row = {
+  id: string;
+  title: string;
+  tags: string[] | null;
+  episodes_count: number | null;
+  thumbnail_url: string | null;
+};
 
 export default function AnimeListScreen() {
-  const { data, isLoading, error, refetch, isRefetching } = useAnimeList();
+  const [data, setData] = useState<Row[] | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  if (isLoading) {
+  const load = async () => {
+    setError(null);
+    setLoading(true);
+    const { data, error } = await supabase
+      .from('anime')
+      .select('id,title,tags,episodes_count,thumbnail_url')
+      .order('created_at', { ascending: false })
+      .limit(25);
+    if (error) setError(error.message);
+    setData(data ?? []);
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    load();
+  }, []);
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await load();
+    setRefreshing(false);
+  }, []);
+
+  if (loading) {
     return (
       <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
         <ActivityIndicator />
-        <Text style={{ marginTop: 8, opacity: 0.7 }}>Loading anime…</Text>
+        <Text style={{ marginTop: 8 }}>Loading anime…</Text>
       </View>
     );
   }
-
   if (error) {
     return (
-      <View style={{ flex: 1, padding: 16, alignItems: 'center', justifyContent: 'center' }}>
+      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 16 }}>
         <Text style={{ fontWeight: '700', marginBottom: 6 }}>Failed to load anime</Text>
-        <Text selectable style={{ textAlign: 'center', opacity: 0.8 }}>
-          {String((error as Error).message)}
-        </Text>
+        <Text selectable style={{ textAlign: 'center', opacity: 0.8 }}>{error}</Text>
       </View>
     );
   }
 
   return (
     <FlatList
-      data={data}
+      data={data || []}
       keyExtractor={item => item.id}
-      refreshing={isRefetching}
-      onRefresh={refetch}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       contentContainerStyle={{ padding: 16, gap: 12 }}
       renderItem={({ item }) => (
         <View
@@ -46,7 +76,7 @@ export default function AnimeListScreen() {
           {item.thumbnail_url ? (
             <Image
               source={{ uri: item.thumbnail_url }}
-              style={{ width: 56, height: 56, borderRadius: 8, backgroundColor: '#f3f4f6' }}
+              style={{ width: 56, height: 56, borderRadius: 8, backgroundColor: '#eee' }}
             />
           ) : (
             <View
@@ -54,7 +84,7 @@ export default function AnimeListScreen() {
                 width: 56,
                 height: 56,
                 borderRadius: 8,
-                backgroundColor: '#f3f4f6',
+                backgroundColor: '#eef2ff',
                 alignItems: 'center',
                 justifyContent: 'center',
               }}

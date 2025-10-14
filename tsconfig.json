@@ -1,0 +1,22 @@
+{
+  "extends": "@tsconfig/react-native/tsconfig.json",
+  "compilerOptions": {
+    "strict": true,
+    "noImplicitReturns": true,
+    "noFallthroughCasesInSwitch": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": false,
+    "baseUrl": ".",
+    "paths": {
+      "@app/*": ["src/app/*"],
+      "@config/*": ["src/config/*"],
+      "@db/*": ["src/db/*"],
+      "@features/*": ["src/features/*"],
+      "@state/*": ["src/state/*"],
+      "@ui/*": ["src/ui/*"]
+    },
+    "types": ["jest"]
+  },
+  "include": ["src", "index.js", "index.ts", "index.tsx", "jest.setup.ts", "jest.setup.js"],
+  "exclude": ["node_modules", "babel.config.js", "metro.config.js"]
+}
