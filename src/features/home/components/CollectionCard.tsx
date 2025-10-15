@@ -8,7 +8,6 @@ type Props = {
   subtitle: string;
   tags: string[];
   posters: {id:string; title:string; img:string}[];
-  colors?: [string, string];
 };
 export function CollectionCard({ title, subtitle, tags, posters }: Props) {
   return (

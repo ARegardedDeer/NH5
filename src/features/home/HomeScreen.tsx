@@ -15,7 +15,7 @@ export default function HomeScreen() {
 
         <View style={{ paddingHorizontal:16, gap:12 }}>
           {rails.map(r=>(
-            <CollectionCard key={r.id} title={r.title} subtitle={r.subtitle} tags={r.tags} posters={r.posters} colors={r.colors}/>
+            <CollectionCard key={r.id} title={r.title} subtitle={r.subtitle} tags={r.tags} posters={r.posters}/>
           ))}
         </View>
 
