@@ -1,5 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { View, Text, FlatList, ActivityIndicator, Image, RefreshControl } from 'react-native';
+import { View, Text, FlatList, ActivityIndicator, Image, RefreshControl, Pressable } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { supabase } from '../../../db/supabaseClient';
 
 type Row = {
@@ -10,11 +12,19 @@ type Row = {
   thumbnail_url: string | null;
 };
 
+type DiscoverStackParamList = {
+  DiscoverList: undefined;
+  AnimeDetail: { id: string; title?: string };
+};
+
+type DiscoverNavigation = NativeStackNavigationProp<DiscoverStackParamList, 'DiscoverList'>;
+
 export default function AnimeListScreen() {
   const [data, setData] = useState<Row[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const navigation = useNavigation<DiscoverNavigation>();
 
   const load = async () => {
     setError(null);
@@ -63,15 +73,20 @@ export default function AnimeListScreen() {
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       contentContainerStyle={{ padding: 16, gap: 12 }}
       renderItem={({ item }) => (
-        <View
-          style={{
-            flexDirection: 'row',
-            gap: 12,
-            padding: 12,
-            borderWidth: 1,
-            borderColor: '#e5e7eb',
-            borderRadius: 12,
-          }}
+        <Pressable
+          onPress={() => navigation.navigate('AnimeDetail', { id: item.id, title: item.title })}
+          style={({ pressed }) => [
+            {
+              flexDirection: 'row',
+              gap: 12,
+              padding: 12,
+              borderWidth: 1,
+              borderColor: '#e5e7eb',
+              borderRadius: 12,
+              backgroundColor: '#fff',
+            },
+            pressed ? { opacity: 0.7 } : null,
+          ]}
         >
           {item.thumbnail_url ? (
             <Image
@@ -101,7 +116,7 @@ export default function AnimeListScreen() {
               {item.episodes_count != null ? `${item.episodes_count} eps` : ''}
             </Text>
           </View>
-        </View>
+        </Pressable>
       )}
       ListEmptyComponent={
         <Text style={{ textAlign: 'center', marginTop: 40, opacity: 0.7 }}>No anime yet.</Text>
