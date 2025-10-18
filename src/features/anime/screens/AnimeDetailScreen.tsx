@@ -40,7 +40,18 @@ export default function AnimeDetailScreen() {
       setLocalEleven(undefined);
       Alert.alert('Saved!', 'Your rating has been saved.');
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Failed to save rating';
+      console.error('[AnimeDetail] save error', err);
+      let message = 'Failed to save rating';
+      if (err && typeof err === 'object') {
+        const errorObj = err as Record<string, unknown>;
+        message =
+          (typeof errorObj.message === 'string' && errorObj.message) ||
+          (typeof errorObj.details === 'string' && errorObj.details) ||
+          (typeof errorObj.hint === 'string' && errorObj.hint) ||
+          JSON.stringify(err);
+      } else if (err instanceof Error) {
+        message = err.message;
+      }
       Alert.alert('Error', message);
     }
   };

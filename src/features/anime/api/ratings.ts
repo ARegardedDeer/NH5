@@ -51,11 +51,44 @@ export async function upsertMyRating(params: {
     device_user_id: identity.isUser ? null : identity.value,
   };
 
+  console.log('[ratings.upsert] payload:', payload);
+
   const { data, error } = await supabase
     .from('ratings')
-    .upsert(payload, { onConflict: `${identity.column},anime_id` })
-    .select('user_id, device_user_id, anime_id, score_overall, is_eleven_out_of_ten')
-    .single();
-  if (error) throw error;
-  return data as RatingRow;
+    .upsert(payload, {
+      onConflict: identity.isUser ? 'user_id,anime_id' : 'device_user_id,anime_id',
+      ignoreDuplicates: false,
+    })
+    .select()
+    .maybeSingle();
+
+  if (error) {
+    console.error('[ratings.upsert] error:', JSON.stringify(error, null, 2));
+    throw error;
+  }
+
+  return (data as RatingRow | null) ?? null;
+}
+
+export async function __dev_probeInsert(animeId: string) {
+  const payload: RatingRow & { device_user_id: string } = {
+    device_user_id: '00000000-0000-4000-8000-000000000000',
+    anime_id: animeId,
+    score_overall: 7,
+    is_eleven_out_of_ten: false,
+  };
+
+  console.log('[ratings.__dev_probeInsert] payload:', payload);
+
+  const { data, error } = await supabase
+    .from('ratings')
+    .upsert(payload, { onConflict: 'device_user_id,anime_id', ignoreDuplicates: false })
+    .select()
+    .maybeSingle();
+
+  if (error) {
+    console.error('[ratings.__dev_probeInsert] error:', JSON.stringify(error, null, 2));
+  }
+
+  return { data, error };
 }
