@@ -39,7 +39,7 @@ export async function getMyRating(anime_id: string) {
 
 export async function upsertMyRating(params: {
   anime_id: string;
-  score_overall: number;
+  score_overall: number | null;
   is_eleven_out_of_ten?: boolean;
 }) {
   const identity = await resolveIdentity();
@@ -64,10 +64,12 @@ export async function upsertMyRating(params: {
 
   if (error) {
     console.error('[ratings.upsert] error:', JSON.stringify(error, null, 2));
-    throw error;
   }
 
-  return (data as RatingRow | null) ?? null;
+  return {
+    data: (data as RatingRow | null) ?? null,
+    error: error ?? null,
+  };
 }
 
 export async function __dev_probeInsert(animeId: string) {

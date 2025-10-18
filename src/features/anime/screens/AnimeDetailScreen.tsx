@@ -1,126 +1,145 @@
-import React, { useState } from 'react';
-import { View, Text, Image, ScrollView, ActivityIndicator, Alert, Pressable } from 'react-native';
+import React, { useEffect, useMemo, useState } from 'react';
+import { ActivityIndicator, Alert, Image, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRoute } from '@react-navigation/native';
 import { useAnimeById } from '../hooks/useAnimeById';
 import { useMyRating } from '../hooks/useMyRating';
-import { RatingPicker } from '../components/RatingPicker';
 import { theme } from '../../../ui/theme';
+import { RatingPicker } from '../components/RatingPicker';
 
-type RouteParams = { id: string; title?: string };
+type RouteParams = { id: string; title: string };
 
 export default function AnimeDetailScreen() {
-  const route = useRoute();
-  const { id, title } = (route.params as RouteParams) || { id: '' };
+  const route = useRoute() as any;
+  const { id, title } = (route.params || {}) as RouteParams;
+
   const { data, isLoading, error } = useAnimeById(id);
-  const { ratingQuery, upsert } = useMyRating(id);
-  const [localScore, setLocalScore] = useState<number | undefined>(undefined);
-  const [localEleven, setLocalEleven] = useState<boolean | undefined>(undefined);
+  const { ratingQuery, upsert, upsertStatus } = useMyRating(id);
 
-  const serverScore = ratingQuery.data?.score_overall ?? undefined;
-  const serverEleven = !!ratingQuery.data?.is_eleven_out_of_ten;
-  const effectiveScore = localScore ?? serverScore ?? null;
-  const effectiveEleven = (localEleven ?? serverEleven) || effectiveScore === 11;
+  // local form state (mutually exclusive)
+  const initialScore = ratingQuery.data?.score_overall ?? null;
+  const initialEleven = !!ratingQuery.data?.is_eleven_out_of_ten;
 
-  const handleToggleEleven = () => {
-    setLocalEleven(prev => {
-      const current = prev ?? serverEleven;
-      return !current;
+  const [score, setScore] = useState<number | null>(initialScore);
+  const [isEleven, setIsEleven] = useState<boolean>(initialEleven);
+
+  useEffect(() => {
+    setScore(initialScore);
+    setIsEleven(initialEleven);
+  }, [initialScore, initialEleven]);
+
+  // keep exclusivity in UI
+  const onPickScore = (n: number) => {
+    setIsEleven(false);
+    setScore(n);
+  };
+  const onToggleEleven = () => {
+    setIsEleven((prev) => {
+      const next = !prev;
+      if (next) setScore(null);
+      return next;
     });
   };
 
-  const handleSave = async () => {
-    const score = effectiveScore;
-    if (score == null || score < 1 || score > 10) {
-      Alert.alert('Pick a score 1–10');
+  const canSave = useMemo(() => isEleven || (score !== null && score >= 1 && score <= 10), [isEleven, score]);
+
+  const onSave = async () => {
+    if (!canSave) {
+      Alert.alert('Pick a rating', 'Choose 1–10 or 11/10.');
       return;
     }
+    const payload = {
+      score_overall: isEleven ? null : score,
+      is_eleven_out_of_ten: isEleven,
+    } as { score_overall: number | null; is_eleven_out_of_ten: boolean };
+
     try {
-      await upsert.mutateAsync({ score_overall: score, is_eleven_out_of_ten: effectiveEleven });
-      setLocalScore(undefined);
-      setLocalEleven(undefined);
-      Alert.alert('Saved!', 'Your rating has been saved.');
-    } catch (err: unknown) {
-      console.error('[AnimeDetail] save error', err);
-      let message = 'Failed to save rating';
-      if (err && typeof err === 'object') {
-        const errorObj = err as Record<string, unknown>;
-        message =
-          (typeof errorObj.message === 'string' && errorObj.message) ||
-          (typeof errorObj.details === 'string' && errorObj.details) ||
-          (typeof errorObj.hint === 'string' && errorObj.hint) ||
-          JSON.stringify(err);
-      } else if (err instanceof Error) {
-        message = err.message;
+      const { error: e } = await upsert(payload);
+      if (e) {
+        console.error('[AnimeDetail] save error', e);
+        Alert.alert('Error', e.message || e.details || 'Failed to save rating');
+        return;
       }
-      Alert.alert('Error', message);
+      Alert.alert('Saved', isEleven ? 'Marked as 11/10' : `Saved ${score}/10`);
+    } catch (err: any) {
+      console.error('[AnimeDetail] save exception', err);
+      Alert.alert('Error', err?.message || 'Failed to save rating');
     }
   };
 
   if (isLoading) {
     return (
-      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-        <ActivityIndicator />
-        <Text style={{ marginTop: 8 }}>Loading…</Text>
-      </View>
+      <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
+        <View style={styles.center}>
+          <ActivityIndicator color="#fff" />
+          <Text style={styles.loadingText}>Loading anime…</Text>
+        </View>
+      </SafeAreaView>
     );
   }
-  if (error || !data) {
+
+  if (error) {
     return (
-      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 16 }}>
-        <Text style={{ fontWeight: '700', marginBottom: 6 }}>Failed to load</Text>
-        <Text selectable>{String(error || 'Not found')}</Text>
-      </View>
+      <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
+        <View style={styles.center}>
+          <Text style={styles.title}>Failed to load</Text>
+          <Text style={styles.errorText}>{String(error)}</Text>
+        </View>
+      </SafeAreaView>
     );
   }
 
   return (
-    <ScrollView contentContainerStyle={{ padding: 16, gap: 12 }}>
-      {data.thumbnail_url ? (
-        <Image
-          source={{ uri: data.thumbnail_url }}
-          style={{ width: '100%', height: 220, borderRadius: 16, backgroundColor: '#eee' }}
-        />
-      ) : null}
-      <Text style={{ fontSize: 22, fontWeight: '800' }}>{data.title || title}</Text>
-      <Text style={{ opacity: 0.8 }}>{(data.tags ?? []).join(' · ')}</Text>
-      <Text style={{ opacity: 0.8 }}>
-        {data.episodes_count != null ? `${data.episodes_count} episodes` : ''}
-      </Text>
-      <Text style={{ opacity: 0.8 }}>{data.air_date ? `Aired: ${data.air_date}` : ''}</Text>
-      {Array.isArray(data.voice_actors) && data.voice_actors.length > 0 && (
-        <Text style={{ opacity: 0.8 }}>VAs: {data.voice_actors.join(', ')}</Text>
-      )}
-      {data.synopsis ? <Text style={{ marginTop: 8, lineHeight: 20 }}>{data.synopsis}</Text> : null}
-      <View style={{ height: 1, backgroundColor: theme.colors.border, marginVertical: 12 }} />
-      <View style={{ gap: 12 }}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-          <Text style={{ fontSize: 18, fontWeight: '700' }}>Your Rating</Text>
-          {ratingQuery.isFetching ? <ActivityIndicator size="small" /> : null}
-        </View>
-        <RatingPicker
-          value={effectiveScore}
-          onChange={setLocalScore}
-          eleven={effectiveEleven}
-          onToggleEleven={handleToggleEleven}
-        />
-        {ratingQuery.error ? (
-          <Text style={{ color: 'red' }}>Failed to load rating. Try again later.</Text>
+    <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
+      <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
+        <Text style={styles.title}>{title}</Text>
+
+        {data?.thumbnail_url ? (
+          <Image source={{ uri: data.thumbnail_url }} style={styles.poster} resizeMode="cover" />
         ) : null}
-        <Pressable
-          onPress={handleSave}
-          disabled={upsert.isPending}
-          style={{
-            alignSelf: 'flex-start',
-            backgroundColor: theme.colors.primary,
-            paddingHorizontal: 16,
-            paddingVertical: 10,
-            borderRadius: 999,
-            opacity: upsert.isPending ? 0.7 : 1,
-          }}
-        >
-          <Text style={{ color: '#fff', fontWeight: '700' }}>{upsert.isPending ? 'Saving…' : 'Save Rating'}</Text>
-        </Pressable>
-      </View>
-    </ScrollView>
+
+        <View style={styles.meta}>
+          {!!data?.tags?.length && (
+            <Text style={styles.metaText}>{(data.tags as string[]).join(', ')}</Text>
+          )}
+          {!!data?.episodes_count && (
+            <Text style={styles.metaText}>{data.episodes_count} eps</Text>
+          )}
+          {!!data?.air_date && (
+            <Text style={styles.metaText}>Aired: {String(data.air_date)}</Text>
+          )}
+        </View>
+
+        <View style={styles.divider} />
+
+        <Text style={styles.sectionTitle}>Your Rating</Text>
+        <RatingPicker
+          score={score}
+          eleven={isEleven}
+          onPickScore={onPickScore}
+          onToggleEleven={onToggleEleven}
+          onSave={onSave}
+          saving={ratingQuery.isFetching || upsertStatus.isPending}
+        />
+
+        {/* bottom spacer so buttons never hide */}
+        <View style={{ height: 32 }} />
+      </ScrollView>
+    </SafeAreaView>
   );
 }
+
+const styles = StyleSheet.create({
+  safe: { flex: 1, backgroundColor: theme.colors.backgroundDark },
+  scroll: { flex: 1 },
+  content: { padding: 16, paddingBottom: 40 },
+  center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24, gap: 12 },
+  title: { color: '#fff', fontSize: 24, fontWeight: '700', marginBottom: 12 },
+  loadingText: { color: 'rgba(255,255,255,0.8)', fontSize: 14 },
+  errorText: { color: 'rgba(255,255,255,0.7)', textAlign: 'center' },
+  poster: { width: '100%', height: 200, borderRadius: 12, marginBottom: 12 },
+  meta: { gap: 4, marginBottom: 8 },
+  metaText: { color: 'rgba(255,255,255,0.8)' },
+  divider: { height: 1, backgroundColor: 'rgba(255,255,255,0.12)', marginVertical: 12 },
+  sectionTitle: { color: '#fff', fontSize: 18, fontWeight: '700', marginBottom: 8 },
+});

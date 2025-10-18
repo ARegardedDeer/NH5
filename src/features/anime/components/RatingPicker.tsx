@@ -1,53 +1,94 @@
 import React from 'react';
-import { View, Text, Pressable, StyleSheet } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { theme } from '../../../ui/theme';
 
 type Props = {
-  value?: number | null;
-  onChange: (n: number) => void;
-  eleven?: boolean;
+  score: number | null;
+  eleven: boolean;
+  onPickScore: (n: number) => void;
   onToggleEleven: () => void;
+  onSave: () => void;
+  saving?: boolean;
 };
 
-export function RatingPicker({ value, onChange, eleven, onToggleEleven }: Props) {
+export const RatingPicker: React.FC<Props> = ({
+  score,
+  eleven,
+  onPickScore,
+  onToggleEleven,
+  onSave,
+  saving,
+}) => {
   return (
-    <View style={{ gap: 10 }}>
-      <Text style={{ color: theme.colors.text, fontSize: 16, fontWeight: '700' }}>Your Rating</Text>
-      <View style={s.row}>
-        {Array.from({ length: 10 }, (_, i) => i + 1).map(n => (
-          <Pressable key={n} onPress={() => onChange(n)} style={[s.chip, value === n && s.chipActive]}>
-            <Text style={[s.chipText, value === n && s.chipTextActive]}>{n}</Text>
-          </Pressable>
-        ))}
+    <View style={styles.container}>
+      <View style={styles.row}>
+        {Array.from({ length: 10 }).map((_, i) => {
+          const n = i + 1;
+          const active = score === n && !eleven;
+          return (
+            <Pressable
+              key={n}
+              onPress={() => onPickScore(n)}
+              style={[styles.dot, active && styles.dotActive, eleven && styles.dotDisabled]}
+              disabled={eleven}
+            >
+              <Text style={[styles.dotText, active && styles.dotTextActive]}>{n}</Text>
+            </Pressable>
+          );
+        })}
+        <Pressable
+          onPress={onToggleEleven}
+          style={[styles.eleven, eleven && styles.elevenActive]}
+        >
+          <Text style={[styles.elevenText, eleven && styles.elevenTextActive]}>11</Text>
+        </Pressable>
       </View>
-      <Pressable onPress={onToggleEleven} style={[s.eleven, eleven && s.chipActive]}>
-        <Text style={[s.chipText, eleven && s.chipTextActive]}>Make it an 11/10 🔥</Text>
+
+      <Pressable
+        onPress={onSave}
+        disabled={saving || (!eleven && (score == null))}
+        style={({ pressed }) => [
+          styles.save,
+          (saving || (!eleven && (score == null))) && styles.saveDisabled,
+          pressed && !saving && styles.savePressed,
+        ]}
+      >
+        <Text style={styles.saveText}>{saving ? 'Saving…' : 'Save Rating'}</Text>
       </Pressable>
     </View>
   );
-}
+};
 
-const s = StyleSheet.create({
-  row: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  chip: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    backgroundColor: 'rgba(255,255,255,0.06)',
+const styles = StyleSheet.create({
+  container: { gap: 12 },
+  row: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 8 },
+  dot: {
+    width: 36, height: 36, borderRadius: 18,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    alignItems: 'center', justifyContent: 'center',
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.18)',
   },
-  chipActive: { backgroundColor: theme.colors.accent, borderColor: 'transparent' },
-  chipText: { color: theme.colors.text },
-  chipTextActive: { color: '#000', fontWeight: '800' },
+  dotActive: { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary },
+  dotDisabled: { opacity: 0.35 },
+  dotText: { color: 'rgba(255,255,255,0.8)', fontWeight: '600' },
+  dotTextActive: { color: '#000' },
   eleven: {
-    marginTop: 6,
-    alignSelf: 'flex-start',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    backgroundColor: 'rgba(255,255,255,0.06)',
+    marginLeft: 8,
+    paddingHorizontal: 14, height: 36, borderRadius: 18,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    alignItems: 'center', justifyContent: 'center',
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.18)',
   },
+  elevenActive: { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary },
+  elevenText: { color: 'rgba(255,255,255,0.9)', fontWeight: '800' },
+  elevenTextActive: { color: '#000' },
+  save: {
+    marginTop: 8,
+    height: 44, borderRadius: 10,
+    backgroundColor: theme.colors.primary,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  saveDisabled: { opacity: 0.6 },
+  savePressed: { opacity: 0.85 },
+  saveText: { color: '#000', fontWeight: '700' },
 });
