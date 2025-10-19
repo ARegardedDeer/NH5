@@ -1,55 +1,43 @@
 import React from 'react';
-import {StyleSheet, Text, View} from 'react-native';
+import { RefreshControl, ScrollView, Text, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { useProfileData } from '../hooks/useProfileData';
+import { ProfileHeader } from '../components/ProfileHeader';
+import { ShowcasedBadges } from '../components/ShowcasedBadges';
+import { ElevenHighlight } from '../components/ElevenHighlight';
+import { TopList } from '../components/TopList';
+import { SocialLinks } from '../components/SocialLinks';
 
-const ProfileScreen: React.FC = () => {
+export default function ProfileScreen() {
+  const { loading, error, user, profile, badges, eleven, topList, socials, refetch } = useProfileData();
+
+  if (loading && !user) {
+    return (
+      <SafeAreaView className="flex-1 bg-[#020617] items-center justify-center" edges={['top', 'left', 'right']}>
+        <Text className="text-base text-white/70">Loading your profile…</Text>
+      </SafeAreaView>
+    );
+  }
+
   return (
-    <View style={styles.container}>
-      <View style={styles.avatar}>
-        <Text style={styles.avatarInitial}>NH</Text>
-      </View>
-      <Text style={styles.title}>Welcome back!</Text>
-      <Text style={styles.subtitle}>
-        Personalization, stats, and achievements will show up here.
-      </Text>
-    </View>
+    <SafeAreaView className="flex-1 bg-[#020617]" edges={['top', 'left', 'right']}>
+      <ScrollView
+        className="flex-1"
+        contentContainerStyle={{ padding: 16, gap: 16, paddingBottom: 48 }}
+        refreshControl={<RefreshControl refreshing={loading} onRefresh={refetch} tintColor="#fff" />}
+      >
+        <ProfileHeader user={user} profile={profile} />
+        <ShowcasedBadges badges={badges} />
+        <ElevenHighlight eleven={eleven} />
+        <TopList items={topList} />
+        <SocialLinks profile={profile} links={socials} />
+        {error ? (
+          <View className="rounded-xl border border-red-500/30 bg-red-500/10 p-4">
+            <Text className="text-sm font-semibold text-red-200">We couldn’t load everything.</Text>
+            <Text className="mt-1 text-xs text-red-200/90">{error.message}</Text>
+          </View>
+        ) : null}
+      </ScrollView>
+    </SafeAreaView>
   );
-};
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 24,
-    backgroundColor: '#020617',
-  },
-  avatar: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    marginBottom: 24,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#0f172a',
-    borderColor: '#1e293b',
-    borderWidth: 2,
-  },
-  avatarInitial: {
-    fontSize: 40,
-    fontWeight: '700',
-    color: '#38bdf8',
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: '#f1f5f9',
-  },
-  subtitle: {
-    marginTop: 12,
-    fontSize: 16,
-    color: '#94a3b8',
-    textAlign: 'center',
-  },
-});
-
-export default ProfileScreen;
+}

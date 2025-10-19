@@ -5,6 +5,7 @@ import HomeScreen from '../features/home/HomeScreen';
 import AnimeListScreen from '../features/anime/screens/AnimeListScreen';
 import AnimeDetailScreen from '../features/anime/screens/AnimeDetailScreen';
 import PlaceholderScreen from '../features/misc/PlaceholderScreen';
+import ProfileScreen from '../features/profile/screens/ProfileScreen';
 import MaterialIcon from 'react-native-vector-icons/MaterialIcons';
 
 type DiscoverStackParamList = {
@@ -35,6 +36,7 @@ export default function AppNavigator() {
             Discover: 'explore',
             'My List': 'bookmark',
             Community: 'forum',
+            Profile: 'person',
           };
           const name = map[route.name] ?? 'circle';
           return <MaterialIcon name={name} size={size} color={color} />;
@@ -45,6 +47,7 @@ export default function AppNavigator() {
       <Tabs.Screen name="Discover" component={DiscoverStackNavigator} />
       <Tabs.Screen name="My List" children={() => <PlaceholderScreen title="My List" />} />
       <Tabs.Screen name="Community" children={() => <PlaceholderScreen title="Community" />} />
+      <Tabs.Screen name="Profile" component={ProfileScreen} />
     </Tabs.Navigator>
   );
 }
