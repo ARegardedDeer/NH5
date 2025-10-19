@@ -4,7 +4,9 @@ import { useNavigation } from '@react-navigation/native';
 import PosterImage from '../../../ui/components/PosterImage';
 import ProgressBar from '../../../ui/components/ProgressBar';
 import { SectionTitle, Card } from '../../../ui/components/Section';
+import BadgeChip from '../../../ui/components/BadgeChip';
 import ProfileHeader from '../components/ProfileHeader';
+import SocialLinks from '../components/SocialLinks';
 import useProfileData from '../hooks/useProfileData';
 
 export default function ProfileScreen() {
@@ -75,9 +77,7 @@ export default function ProfileScreen() {
       <ScrollView horizontal className="px-4 py-2" showsHorizontalScrollIndicator={false}>
         {badges.length ? (
           badges.map((b) => (
-            <View key={b.id} className="mr-2 rounded-full bg-purple-500/20 border border-purple-500/40 px-3 py-1">
-              <Text className="text-white">{b.name}</Text>
-            </View>
+            <BadgeChip key={b.id} label={b.name} />
           ))
         ) : (
           <Text className="text-white/60 px-4">No showcased badges yet.</Text>
@@ -133,28 +133,11 @@ export default function ProfileScreen() {
       </ScrollView>
 
       {/* Socials */}
-      {showSocials ? (
+      {showSocials || socialsData.twitch || socialsData.x || socialsData.youtube ? (
         <>
           <SectionTitle>Socials</SectionTitle>
           <Card>
-            {socialsData.twitch ? (
-              <Text className="text-white">
-                Twitch{'\n'}
-                {socialsData.twitch}
-              </Text>
-            ) : null}
-            {socialsData.x ? (
-              <Text className="text-white mt-3">
-                X{'\n'}
-                {socialsData.x}
-              </Text>
-            ) : null}
-            {socialsData.youtube ? (
-              <Text className="text-white mt-3">
-                YouTube{'\n'}
-                {socialsData.youtube}
-              </Text>
-            ) : null}
+            <SocialLinks socials={socialsData} show={showSocials || Boolean(socialsData.twitch || socialsData.x || socialsData.youtube)} />
           </Card>
         </>
       ) : null}

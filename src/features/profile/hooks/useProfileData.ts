@@ -198,11 +198,15 @@ async function fetchProfileBundle(userId: string, currentUserId?: string | null)
       displayName = username;
       derivedHandle = (up?.handle ?? username ?? undefined) as string | undefined;
       bio = (up?.bio ?? null) as string | null;
-      showSocials = !!up?.show_socials;
-      socials = {
+      const socialsCandidate = {
         twitch: (up?.twitch ?? null) as string | null,
         x: (up?.x ?? null) as string | null,
         youtube: (up?.youtube ?? null) as string | null,
+      };
+      const anySocial = Boolean(socialsCandidate.youtube || socialsCandidate.twitch || socialsCandidate.x);
+      showSocials = Boolean(up?.show_socials) || anySocial;
+      socials = {
+        ...socialsCandidate,
       };
       avatarUrl = data.avatar_url ?? null;
       user = {
