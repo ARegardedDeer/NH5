@@ -1,179 +1,171 @@
-import React, { useCallback, useMemo } from 'react';
-import { ScrollView, View, Text, RefreshControl, Pressable } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import useProfileData from '../hooks/useProfileData';
-import Avatar from '../../../ui/components/Avatar';
-import Section from '../../../ui/components/Section';
-import ProgressBar from '../../../ui/components/ProgressBar';
-import PosterImage from '../../../ui/components/PosterImage';
+import React from "react";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { ScrollView, View, Text, RefreshControl, StyleSheet } from "react-native";
+import useProfileData from "../../hooks/useProfileData";
+import Avatar from "../../../ui/components/Avatar";
+import Section from "../../../ui/components/Section";
+import ProgressBar from "../../../ui/components/ProgressBar";
+import PosterImage from "../../../ui/components/PosterImage";
 
-const FALLBACK_BADGES = ['Isekai Addict', 'Horror Connoisseur', 'Slice-of-Life Sage'];
+const C = {
+  bg: "#0F0D1A",
+  text: "#FFFFFF",
+  sub: "#D4D4D8",    // zinc-300
+  sub2: "#A1A1AA",   // zinc-400
+  accent: "#A78BFA"  // indigo-300/400 vibe
+};
 
 export default function ProfileScreen() {
-  const {
-    loading,
-    errorText,
-    refetch,
-    displayName,
-    handle,
-    bio,
-    stats,
-    eleven,
-    topList = [],
-    showSocials,
-    socials,
-    badges = [],
-    avatarUrl,
-    user,
-    isOwner,
-  } = useProfileData();
+  const { data, isLoading, refetch, error } = useProfileData();
 
-  const onRefresh = useCallback(() => {
-    refetch?.();
-  }, [refetch]);
+  const onRefresh = React.useCallback(() => { refetch(); }, [refetch]);
 
-  const badgeItems = useMemo(() => {
-    if (badges.length) {
-      return badges.map((badge) => badge.name ?? 'Badge');
-    }
-    return FALLBACK_BADGES;
-  }, [badges]);
-
-  const level = user?.level ?? 1;
-  const totalExp = Math.max(1000, Math.ceil((level + 1) * 1000));
-  const exp = user?.exp ?? 0;
-  const progressValue = exp % totalExp;
-
-  const renderTitle = (text: string, extra?: string) => (
-    <Text className={`text-white text-base font-semibold ${extra ?? ''}`}>{text}</Text>
-  );
-
-  const renderBody = (text: string, extra?: string) => (
-    <Text className={`text-zinc-300 text-sm ${extra ?? ''}`}>{text}</Text>
-  );
-
-  const renderStat = (label: string, value: string | number) => (
-    <View key={label} className="items-center px-4">
-      <Text className="text-white text-xl font-bold">{String(value)}</Text>
-      <Text className="text-zinc-400 text-xs mt-1">{label}</Text>
+  const Stat = ({ label, value }: {label:string; value:number|string}) => (
+    <View style={styles.statItem}>
+      <Text style={styles.statValue}>{String(value)}</Text>
+      <Text style={styles.statLabel}>{label}</Text>
     </View>
   );
 
   return (
-    <SafeAreaView edges={['top']} className="bg-[#0F0D1A] flex-1">
+    <SafeAreaView edges={["top"]} style={{ flex: 1, backgroundColor: C.bg }}>
       <ScrollView
-        className="px-4"
-        contentContainerStyle={{ paddingBottom: 48 }}
+        contentContainerStyle={styles.container}
         refreshControl={
-          <RefreshControl tintColor="#fff" refreshing={Boolean(loading)} onRefresh={onRefresh} />
+          <RefreshControl tintColor={C.text} refreshing={isLoading} onRefresh={onRefresh} />
         }
       >
-        <View className="flex-row items-center gap-3 mt-2 mb-8">
-          <Avatar name={displayName} uri={avatarUrl ?? user?.avatar_url ?? null} size={72} />
-          <View className="flex-1">
-            <Text className="text-white text-xl font-bold" numberOfLines={1}>
-              {displayName ?? user?.username ?? 'NH Explorer'}
+        {/* Header */}
+        <View style={styles.headerRow}>
+          <Avatar size={72} />
+          <View style={{ flex: 1 }}>
+            <Text style={styles.title} numberOfLines={1}>
+              {data?.displayName ?? "NH Explorer"}
             </Text>
-            {!!handle && <Text className="text-zinc-400">@{handle}</Text>}
-            {!!bio && renderBody(bio)}
+            {!!data?.handle && (
+              <Text style={styles.handle}>@{data.handle}</Text>
+            )}
+            {!!data?.bio && (
+              <Text style={styles.body} numberOfLines={2}>{data.bio}</Text>
+            )}
           </View>
-          {isOwner ? (
-            <Pressable className="px-3 py-2 rounded-full bg-indigo-500/20 border border-indigo-400/30">
-              <Text className="text-indigo-200 font-semibold text-sm">Edit</Text>
-            </Pressable>
-          ) : null}
+          <Text style={styles.edit}>Edit</Text>
         </View>
 
-        <Section title="Next Level Progress" className="mb-8">
-          <View className="mt-2">
-            <ProgressBar value={progressValue} max={totalExp} />
-            <Text className="text-zinc-400 text-xs mt-2">
-              {progressValue}/{totalExp} XP
+        {/* Progress */}
+        <Section style={styles.section}>
+          <Text style={styles.h2}>Next Level Progress</Text>
+          <View style={{ marginTop: 12 }}>
+            <ProgressBar value={data?.exp?.current ?? 0} total={data?.exp?.toNext ?? 2000} />
+            <Text style={styles.caption}>
+              {(data?.exp?.current ?? 0)}/{(data?.exp?.toNext ?? 2000)} XP
             </Text>
           </View>
         </Section>
 
-        <Section title="My Stats" className="mb-10">
-          <View className="flex-row justify-between mt-4">
-            {[
-              { label: 'Animes Watched', value: stats?.watchedCount ?? 0 },
-              { label: 'Animes Reviewed', value: stats?.reviewedCount ?? 0 },
-              { label: 'Account Score', value: stats?.accountScore ?? 0 },
-            ].map((item) => renderStat(item.label, item.value))}
+        {/* Stats */}
+        <Section style={styles.section}>
+          <Text style={styles.h2}>My Stats</Text>
+          <View style={styles.statsRow}>
+            <Stat label="Animes Watched"  value={data?.stats?.watched ?? 0} />
+            <Stat label="Animes Reviewed" value={data?.stats?.reviewed ?? 0} />
+            <Stat label="Account Score"   value={data?.score ?? 0} />
           </View>
         </Section>
 
-        <Section title="My Badges" className="mb-10">
-          <View className="flex-row flex-wrap gap-2 mt-3">
-            {badgeItems.map((badge) => (
-              <Text
-                key={badge}
-                className="text-xs text-indigo-200 bg-indigo-500/15 px-3 py-1 rounded-full"
-              >
-                {badge}
+        {/* Badges */}
+        <Section style={styles.section}>
+          <Text style={styles.h2}>My Badges</Text>
+          <View style={styles.badgesRow}>
+            {(data?.badges?.length ? data.badges : ["Isekai Addict","Horror Connoisseur","Slice-of-Life Sage"]).map((b: any, i: number) => (
+              <Text key={i} style={styles.badge}>
+                {typeof b === "string" ? b : (b.name ?? "Badge")}
               </Text>
             ))}
           </View>
         </Section>
 
-        <Section title="My 11/10 Anime" className="mb-10">
-          <View className="mt-4 flex-row items-center gap-4">
-            {eleven?.anime ? (
+        {/* 11/10 */}
+        <Section style={styles.section}>
+          <Text style={styles.h2}>My 11/10 Anime</Text>
+          <View style={styles.elevenRow}>
+            {data?.eleven ? (
               <>
-                <PosterImage uri={eleven.anime.thumbnail_url || null} width={96} />
-                <View className="flex-1">
-                  <Text className="text-white font-semibold" numberOfLines={1}>
-                    {eleven.anime.title}
-                  </Text>
-                  {!!eleven.anime.tags?.length && (
-                    <Text className="text-zinc-400 text-xs" numberOfLines={1}>
-                      {eleven.anime.tags.join(', ')}
+                <PosterImage uri={data.eleven.poster} size={96} />
+                <View style={{ flex: 1, marginLeft: 16 }}>
+                  <Text style={styles.itemTitle} numberOfLines={1}>{data.eleven.title}</Text>
+                  {!!data.eleven.tags?.length && (
+                    <Text style={styles.caption} numberOfLines={1}>
+                      {data.eleven.tags.join(",")}
                     </Text>
                   )}
                 </View>
-                {isOwner ? (
-                  <Pressable className="px-3 py-2 rounded-full bg-white/10">
-                    <Text className="text-white font-semibold text-sm">Change</Text>
-                  </Pressable>
-                ) : null}
               </>
             ) : (
-              renderBody('Pick your all-time #1 later.', 'mt-1')
+              <Text style={styles.body}>Pick your all-time #1 later.</Text>
+            )}
+          </View>
+          <Text style={styles.link}>Change</Text>
+        </Section>
+
+        {/* Top List */}
+        <Section style={styles.section}>
+          <Text style={styles.h2}>My Top List</Text>
+          <View style={styles.topRow}>
+            {(data?.topList ?? []).slice(0, 10).map((a: any, i: number) => (
+              <PosterImage key={i} uri={a.poster} size={112} />
+            ))}
+            {(!data?.topList || data.topList.length === 0) && (
+              <Text style={styles.body}>Add your Top List later.</Text>
             )}
           </View>
         </Section>
 
-        <Section title="My Top List" className="mb-10">
-          <View className="flex-row gap-3 mt-4">
-            {topList.length ? (
-              topList.slice(0, 10).map((entry) => (
-                <PosterImage key={entry.position} uri={entry.anime?.thumbnail_url || null} width={112} />
-              ))
-            ) : (
-              renderBody('Add your Top List later.')
-            )}
-          </View>
-        </Section>
-
-        <Section title="Socials" className="mb-16">
-          {showSocials && socials ? (
-            <View className="mt-3 gap-2">
-              {socials.twitch ? renderBody(`Twitch  ·  ${socials.twitch}`) : null}
-              {socials.x ? renderBody(`X       ·  ${socials.x}`) : null}
-              {socials.youtube ? renderBody(`YouTube ·  ${socials.youtube}`) : null}
+        {/* Socials */}
+        <Section style={styles.bottomSpace}>
+          <Text style={styles.h2}>Socials</Text>
+          {data?.showSocials && data?.socials ? (
+            <View style={{ marginTop: 8 }}>
+              {data.socials.twitch   && <Text style={styles.body}>Twitch  ·  {data.socials.twitch}</Text>}
+              {data.socials.x        && <Text style={styles.body}>X       ·  {data.socials.x}</Text>}
+              {data.socials.youtube  && <Text style={styles.body}>YouTube ·  {data.socials.youtube}</Text>}
             </View>
           ) : (
-            renderBody('No socials added yet.')
+            <Text style={styles.body}>No socials added yet.</Text>
           )}
         </Section>
 
-        {__DEV__ && !!errorText ? (
-          <View className="bg-red-500/15 border border-red-800 rounded-lg p-3 mb-10">
-            <Text className="text-red-300 text-xs">{String(errorText)}</Text>
+        {!!error && __DEV__ && (
+          <View style={styles.errBox}>
+            <Text style={styles.errText}>{String(error)}</Text>
           </View>
-        ) : null}
+        )}
       </ScrollView>
     </SafeAreaView>
   );
 }
 
+const styles = StyleSheet.create({
+  container: { paddingHorizontal: 16, paddingBottom: 48 },
+  headerRow: { flexDirection: "row", alignItems: "center", gap: 12, marginTop: 8, marginBottom: 24 },
+  title: { color: C.text, fontSize: 20, fontWeight: "700" },
+  handle: { color: C.sub2, marginTop: 2 },
+  body: { color: C.sub, fontSize: 14 },
+  h2: { color: C.text, fontSize: 16, fontWeight: "700" },
+  caption: { color: C.sub2, fontSize: 12, marginTop: 6 },
+  edit: { color: C.accent, fontWeight: "600" },
+  section: { marginBottom: 24 },
+  statsRow: { flexDirection: "row", justifyContent: "space-between", marginTop: 12 },
+  statItem: { alignItems: "center", minWidth: 90 },
+  statValue: { color: C.text, fontSize: 20, fontWeight: "700" },
+  statLabel: { color: C.sub2, fontSize: 12, marginTop: 4, textAlign: "center" },
+  badgesRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 12 },
+  badge: { color: "#C7D2FE", fontSize: 12, backgroundColor: "rgba(99,102,241,0.15)", paddingHorizontal: 12, paddingVertical: 6, borderRadius: 999 },
+  elevenRow: { flexDirection: "row", alignItems: "center", marginTop: 12 },
+  itemTitle: { color: C.text, fontWeight: "600", fontSize: 16 },
+  link: { color: C.accent, fontWeight: "600", marginTop: 8 },
+  topRow: { flexDirection: "row", gap: 12, marginTop: 12, flexWrap: "wrap" },
+  bottomSpace: { marginBottom: 64 },
+  errBox: { backgroundColor: "rgba(239,68,68,0.15)", borderColor: "#7F1D1D", borderWidth: 1, borderRadius: 12, padding: 8, marginTop: 16 },
+  errText: { color: "#fecaca", fontSize: 12 }
+});
