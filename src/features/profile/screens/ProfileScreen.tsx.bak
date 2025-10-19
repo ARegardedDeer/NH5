@@ -91,7 +91,7 @@ export default function ProfileScreen() {
           <View style={styles.elevenRow}>
             {data?.eleven ? (
               <>
-                <PosterImage uri={data.eleven?.thumbnail_url ?? null} width={96} />
+                <PosterImage uri={data.eleven.poster} size={96} />
                 <View style={{ flex: 1, marginLeft: 16 }}>
                   <Text style={styles.itemTitle} numberOfLines={1}>{data.eleven.title}</Text>
                   {!!data.eleven.tags?.length && (
@@ -113,7 +113,7 @@ export default function ProfileScreen() {
           <Text style={styles.h2}>My Top List</Text>
           <View style={styles.topRow}>
             {(data?.topList ?? []).slice(0, 10).map((a: any, i: number) => (
-              <PosterImage key={i} uri={a?.thumbnail_url ?? null} width={112} />
+              <PosterImage key={i} uri={a.poster} size={112} />
             ))}
             {(!data?.topList || data.topList.length === 0) && (
               <Text style={styles.body}>Add your Top List later.</Text>

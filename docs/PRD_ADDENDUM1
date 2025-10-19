@@ -1,0 +1,113 @@
+NH5 — Creator & Profile Summary (PRD Addendum)
+
+Last updated: 2025-10-19
+
+0) Positioning (vs. MAL/AniList)
+
+Strategy: NH5 is a daily companion focused on discovery, identity, and social play (quests, badges, cosmetics). It coexists with MAL/AniList as the archival ledger. We win by: creator-led rails, tag-first discovery, P2P rec quests, and session-based rewards.
+
+⸻
+
+1) Creator System (V1) — Summary
+
+Goal: Make creator Top 5/Top 10 lists a native discovery surface.
+
+V1 Features
+	•	Verified Creator profiles (handle, avatar, links).
+	•	Creator Lists (ranked items with notes, source link to video/VOD).
+	•	Follow creators → their new lists appear on Home/Discover rails.
+	•	Featured Lists rail in Discover.
+	•	Quest tie-in: “Complete [Creator] Top 5” → XP + soft-currency (Stardust) + 1 gacha roll.
+	•	Remix (V1.5): clone a list, publish your version.
+
+Data Sketch (tables)
+	•	creators, creator_followers, creator_lists, creator_list_items (and optional user_list_remixes, user_list_remix_items).
+
+Risks → Mitigations
+	•	Brand/likeness: prefer permission; fallback to generic avatar + link.
+	•	Ingestion quality: manual admin queue first.
+	•	Spoilers/toxicity: spoiler-blur, reports, rate limits, shadow-mute.
+
+KPIs
+	•	Creator follow rate ≥ 25% (new users).
+	•	Top 5 quest completion ≥ 35%.
+	•	Ratings/session from creator entry ≥ 3.
+
+⸻
+
+2) User Profile (V1) — Summary
+
+What it shows
+	1.	Header: avatar, display name/@username, bio, small level pill.
+	2.	Showcased Badges: up to 5, user-selected.
+	3.	11/10 Highlight: exactly one per account (user’s #1).
+	4.	Top List: user-curated, ranked (up to 10), clean at any length.
+	5.	Social Links: YouTube, Twitch, X (optional).
+
+Read-only for guests: profiles are viewable without auth; editing requires sign-in (added later).
+
+Schema Adds (to existing DB)
+	•	user_profiles(user_id, bio, show_level, show_socials, top_list_limit)
+	•	user_social_links(user_id, platform in ['youtube','twitch','twitter'], url)
+	•	user_toplist(user_id, anime_id, position, note) with unique (user_id, position)
+	•	Partial unique index on ratings(user_id) where is_eleven_out_of_ten = true (enforces single 11/10).
+
+Milestones
+	•	M1: Read-only profile rendering (badges/11/10/top list/socials).
+	•	M2: Editing flows (search add, drag/drop reorder, set 11/10, choose showcased badges, edit socials).
+	•	M3: Auth gate + RLS policies.
+
+⸻
+
+3) Feedback & Discovery (recap)
+	•	Cadence: combo toast at 3 ratings; quest/badge modals only; daily session summary.
+	•	Rails over infinite scroll: finite horizontal rails with end-cards (soft quests: “rate 3 more to unlock”).
+
+⸻
+
+4) Cosmetics & Currency (non-blockchain)
+
+Design chosen: Soft-currency (Stardust) from quests/levels → gacha rolls for off‑chain collectible avatars.
+	•	Cosmetic only (no gameplay power).
+	•	Pity + shards to reduce RNG frustration.
+	•	Visibility: profile, comments/quests mini-flair, album view.
+	•	No real-money purchases in MVP → avoids loot-box compliance overhead.
+
+Tables (later): user_wallet, gacha_pool, gacha_item, user_item, gacha_roll, user_pity + Edge Function roll_gacha(pool_id).
+
+⸻
+
+5) MVP Roadmap (execution order)
+	1.	Discover rails + Anime detail (Similar by tags).
+	2.	Ratings with tag facets + combo feedback.
+	3.	Profile V1 (read-only).
+	4.	P2P Quest v1 (async, no chat) + XP/badges.
+	5.	Soft-currency gacha + cosmetic equip (off-chain).
+	6.	Import tool (CSV) + creator lists V1.
+	7.	Moderation & spoiler system.
+	8.	Co-occurrence recs + notifications.
+
+⸻
+
+6) Locked Decisions (to remember)
+	•	Top List cap: up to 10 (must look clean at any length).
+	•	11/10: exactly one per account.
+	•	Socials: YouTube, Twitch, X.
+	•	No blockchain/NFTs — collectibles are off-chain.
+	•	iOS-first for MVP.
+
+⸻
+
+7) Open Questions / Next Choices
+	1.	Do we seed demo content for Profile V1 (sample 11/10, 3 badges, 5-item top list)?
+	2.	Rating UI: single sheet pattern vs. inline chips for tag facets?
+	3.	P2P quest rewards split (requester vs responder), and expiry window (48–72h?).
+	4.	Import: start with CSV only or also quick MAL OAuth if available later?
+
+⸻
+
+8) Future‑Proof Notes
+	•	Secrets hygiene (.env in gitignore; precommit secret-scan later).
+	•	Auth (Google Sign-In) & RLS policies once editing ships.
+	•	Privacy/consent UX if we ever aggregate insights commercially.
+	•	Trading/marketplace for cosmetics is deferred (non-transferable at MVP).

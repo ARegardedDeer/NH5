@@ -1,411 +1,265 @@
-import { useMemo } from 'react';
+import { useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import supabase from '../../../db/supabaseClient';
-import { getCurrentUserId } from '../../../state/currentUser';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { supabase } from '../../../db/supabaseClient';
 
-export interface ProfileUser {
-  id: string;
-  username: string;
-  handle?: string | null;
-  avatar_url?: string | null;
-  level?: number | null;
-  exp?: number | null;
-  show_socials?: boolean;
-}
+const DEMO_USER_ID = '1c16d367-73f0-478b-b434-aa3cce20981d';
+const CACHE_KEY = 'nh5_demo_user::profile-hook-cache';
+const CACHE_TTL_MS = 10 * 60 * 1000;
 
-export interface ProfileBadge {
-  id: string;
-  slug: string;
-  name: string;
-  tier?: number | null;
-  type?: string | null;
-}
-
-export interface ElevenHighlight {
-  title?: string;
-  thumbnail_url?: string | null;
-  anime?: {
-    id?: string;
-    title?: string;
-    thumbnail_url?: string | null;
-    tags?: string[] | null;
-  };
-}
-
-export interface TopListEntry {
-  position: number;
-  title?: string;
-  thumbnail_url?: string | null;
-  note?: string | null;
-  anime?: {
-    id?: string;
-    title?: string;
-    thumbnail_url?: string | null;
-  };
-}
-
-export interface SocialLink {
-  platform: 'youtube' | 'twitch' | 'twitter';
-  url: string;
-}
-
-export interface ProfileStats {
-  watchedCount: number;
-  reviewedCount: number;
-  accountScore: number;
-}
-
-interface ProfileBundle {
-  user?: ProfileUser;
-  badges: ProfileBadge[];
-  eleven?: ElevenHighlight;
-  topList: TopListEntry[];
-  socialLinks: SocialLink[];
-  displayName?: string;
-  handle?: string;
-  bio?: string | null;
-  showSocials?: boolean;
-  socials?: {
-    twitch?: string | null;
-    x?: string | null;
-    youtube?: string | null;
-  };
-  avatarUrl?: string | null;
-  stats?: ProfileStats;
-  isOwner?: boolean;
-  error?: string;
-}
-
-const EMPTY_DATA: ProfileBundle = {
-  user: undefined,
-  badges: [],
-  eleven: undefined,
-  topList: [],
-  socialLinks: [],
-  displayName: undefined,
-  handle: undefined,
-  bio: undefined,
-  showSocials: undefined,
-  socials: undefined,
-  avatarUrl: undefined,
-  stats: undefined,
-  isOwner: undefined,
-  error: undefined,
+type SocialLinks = {
+  youtube: string | null;
+  twitch: string | null;
+  x: string | null;
 };
 
-async function fetchProfileBundle(userId: string, currentUserId?: string | null): Promise<ProfileBundle> {
-  const isOwner = Boolean(currentUserId) && currentUserId === userId;
+type ProfileBasics = {
+  handle: string | null;
+  bio: string | null;
+  socials: SocialLinks;
+};
 
-  const headerPromise = supabase
-    .from('users')
-    .select(
-      `
-        id,
-        username,
-        exp,
-        level,
-        avatar_url,
-        user_profiles:user_profiles!left (*)
-      `,
-    )
-    .eq('id', userId)
-    .maybeSingle();
+export type ProfileBadge = {
+  badgeId: string;
+  id: string;
+  isShowcased: boolean;
+  unlockedAt: string | null;
+  name?: string | null;
+};
 
-  const badgesPromise = supabase
-    .from('user_badges')
-    .select(
-      `
-        is_showcased,
-        unlocked_at,
-        badges:badge_id (
-          id,
-          slug,
-          name,
-          tier,
-          type
-        )
-      `,
-    )
-    .eq('user_id', userId)
-    .eq('is_showcased', true)
-    .order('unlocked_at', { ascending: false })
-    .limit(5);
+export type TopListEntry = {
+  position: number;
+  id: string;
+  title: string;
+  thumbnailUrl: string | null;
+  thumbnail_url: string | null;
+  note?: string | null;
+};
 
-  const elevenPromise = supabase
-    .from('ratings')
-    .select('anime:anime_id (id, title, thumbnail_url, tags)')
-    .eq('user_id', userId)
-    .eq('is_eleven_out_of_ten', true)
-    .order('created_at', { ascending: false })
-    .limit(1)
-    .maybeSingle();
+export type HookResult = {
+  profile: ProfileBasics;
+  badges: ProfileBadge[];
+  topList: TopListEntry[];
+  error?: string;
+};
 
-  const topListPromise = supabase
-    .from('user_toplist')
-    .select('position, note, anime:anime_id (title, thumbnail_url)')
-    .eq('user_id', userId)
-    .order('position', { ascending: true })
-    .limit(10);
+const EMPTY_SOCIALS: SocialLinks = { youtube: null, twitch: null, x: null };
 
-  const socialsPromise = supabase
-    .from('user_social_links')
-    .select('platform, url')
-    .eq('user_id', userId)
-    .in('platform', ['youtube', 'twitch', 'twitter']);
+const createEmptyProfile = (): ProfileBasics => ({
+  handle: null,
+  bio: null,
+  socials: { ...EMPTY_SOCIALS },
+});
 
-  const watchedPromise = supabase
-    .from('ratings')
-    .select('anime_id', { head: true, count: 'exact' })
-    .eq('user_id', userId);
+async function getCachedUserId(): Promise<string | null> {
+  try {
+    const raw = await AsyncStorage.getItem(CACHE_KEY);
+    if (!raw) {
+      return null;
+    }
+    const parsed = JSON.parse(raw) as { id?: string; ts?: number };
+    if (!parsed?.id) {
+      return null;
+    }
+    if (Date.now() - (parsed.ts ?? 0) > CACHE_TTL_MS) {
+      return null;
+    }
+    return parsed.id;
+  } catch (err) {
+    console.warn('[profile] cache read error:', err);
+    return null;
+  }
+}
 
-  const reviewedPromise = supabase
-    .from('reviews')
-    .select('id', { head: true, count: 'exact' })
-    .eq('user_id', userId);
+async function setCachedUserId(id: string) {
+  try {
+    await AsyncStorage.setItem(CACHE_KEY, JSON.stringify({ id, ts: Date.now() }));
+  } catch (err) {
+    console.warn('[profile] cache write error:', err);
+  }
+}
 
-  const [headerResult, badgesResult, elevenResult, topListResult, socialsResult, watchedResult, reviewedResult] =
-    await Promise.allSettled([headerPromise, badgesPromise, elevenPromise, topListPromise, socialsPromise, watchedPromise, reviewedPromise]);
+async function resolveUserId(): Promise<string> {
+  const cached = await getCachedUserId();
+  if (cached) {
+    return cached;
+  }
+  await setCachedUserId(DEMO_USER_ID);
+  return DEMO_USER_ID;
+}
 
+async function fetchProfileBasics(userId: string): Promise<{ profile: ProfileBasics; error?: string }> {
+  try {
+    const { data, error } = await supabase
+      .from('user_profiles')
+      .select('handle,bio,twitch,x,youtube')
+      .eq('user_id', userId)
+      .maybeSingle();
+
+    if (error) {
+      console.warn('[profile] fetchProfileBasics error', error.message);
+      return {
+        profile: createEmptyProfile(),
+        error: error.message,
+      };
+    }
+
+    const socials: SocialLinks = {
+      youtube: data?.youtube ?? null,
+      twitch: data?.twitch ?? null,
+      x: data?.x ?? null,
+    };
+
+    const profile: ProfileBasics = {
+      handle: data?.handle ?? null,
+      bio: data?.bio ?? null,
+      socials,
+    };
+
+    console.log('[profile] fetchProfileBasics ok', profile);
+
+    return { profile };
+  } catch (err: any) {
+    const message = err?.message ?? String(err);
+    console.warn('[profile] fetchProfileBasics error', message);
+    return {
+      profile: createEmptyProfile(),
+      error: message,
+    };
+  }
+}
+
+async function fetchBadges(userId: string): Promise<{ badges: ProfileBadge[]; error?: string }> {
+  try {
+    const { data, error } = await supabase
+      .from('user_badges')
+      .select('badge_id,is_showcased,unlocked_at')
+      .eq('user_id', userId)
+      .order('unlocked_at', { ascending: false });
+
+    if (error) {
+      console.warn('[profile] fetchBadges error', error.message);
+      return { badges: [], error: error.message };
+    }
+
+    const badges = (data ?? [])
+      .map((row: any) => {
+        const badgeId = row?.badge_id;
+        if (!badgeId) {
+          return null;
+        }
+        return {
+          badgeId,
+          id: badgeId,
+          isShowcased: Boolean(row?.is_showcased),
+          unlockedAt: row?.unlocked_at ?? null,
+          name: null,
+        } as ProfileBadge;
+      })
+      .filter(Boolean) as ProfileBadge[];
+
+    console.log('[profile] fetchBadges ok', { count: badges.length });
+
+    return { badges };
+  } catch (err: any) {
+    const message = err?.message ?? String(err);
+    console.warn('[profile] fetchBadges error', message);
+    return { badges: [], error: message };
+  }
+}
+async function fetchTopList(userId: string): Promise<{ topList: TopListEntry[]; error?: string }> {
+  try {
+    void userId;
+    const { data, error } = await supabase
+      .from('anime')
+      .select('id,title,thumbnail_url')
+      .order('title', { ascending: true })
+      .limit(10);
+
+    if (error) {
+      console.warn('[profile] fetchTopList error', error.message);
+      return { topList: [], error: error.message };
+    }
+
+    const rows = Array.isArray(data) ? data : [];
+    const topList = rows
+      .map((row: any, index: number) => {
+        const animeId = typeof row?.id === 'string' ? row.id : null;
+        if (!animeId) {
+          return null;
+        }
+        const title = typeof row?.title === 'string' ? row.title : '';
+        const thumbnail = typeof row?.thumbnail_url === 'string' ? row.thumbnail_url : null;
+        return {
+          position: index + 1,
+          id: animeId,
+          title,
+          thumbnailUrl: thumbnail,
+          thumbnail_url: thumbnail,
+          note: null,
+        } as TopListEntry;
+      })
+      .filter(Boolean) as TopListEntry[];
+
+    console.log('[profile] fetchTopList ok', { count: topList.length });
+    if (topList.length > 0) {
+      console.log('[profile] fetchTopList sample', topList.slice(0, 3));
+    }
+
+    return { topList };
+  } catch (err: any) {
+    const message = err?.message ?? String(err);
+    console.warn('[profile] fetchTopList error', message);
+    return { topList: [], error: message };
+  }
+}
+
+async function loadProfileData(): Promise<HookResult> {
   const errors: string[] = [];
-  let user: ProfileUser | undefined;
-  let badges: ProfileBadge[] = [];
-  let eleven: ElevenHighlight | undefined;
-  let topList: TopListEntry[] = [];
-  let socialLinks: SocialLink[] = [];
-  let displayName: string | undefined;
-  let derivedHandle: string | undefined;
-  let bio: string | null | undefined;
-  let showSocials: boolean | undefined;
-  let socials:
-    | {
-        twitch?: string | null;
-        x?: string | null;
-        youtube?: string | null;
-      }
-    | undefined;
-  let avatarUrl: string | null | undefined;
-  let watchedCount = 0;
-  let reviewedCount = 0;
 
-  if (headerResult.status === 'fulfilled') {
-    const { data, error } = headerResult.value;
-    if (error) {
-      errors.push(error.message ?? 'Failed to load profile header.');
-    } else if (data) {
-      const upRaw = (data as any)?.user_profiles ?? {};
-      const up = Array.isArray(upRaw) ? upRaw[0] ?? {} : upRaw ?? {};
-      const username = data.username ?? 'NH Explorer';
-      displayName = username;
-      derivedHandle = (up?.handle ?? username ?? undefined) as string | undefined;
-      bio = (up?.bio ?? null) as string | null;
-      const socialsCandidate = {
-        twitch: (up?.twitch ?? null) as string | null,
-        x: (up?.x ?? null) as string | null,
-        youtube: (up?.youtube ?? null) as string | null,
-      };
-      const anySocial = Boolean(socialsCandidate.youtube || socialsCandidate.twitch || socialsCandidate.x);
-      showSocials = Boolean(up?.show_socials) || anySocial;
-      socials = {
-        ...socialsCandidate,
-      };
-      avatarUrl = data.avatar_url ?? null;
-      user = {
-        id: data.id,
-        username: data.username,
-        handle: derivedHandle ?? null,
-        avatar_url: data.avatar_url ?? null,
-        level: data.level ?? null,
-        exp: data.exp ?? null,
-        show_socials: showSocials,
-      };
-    } else {
-      errors.push('Profile header missing.');
-    }
-  } else {
-    const reason = headerResult.reason as Error | undefined;
-    errors.push(reason?.message ?? 'Failed to load profile header.');
-  }
+  const userId = await resolveUserId().catch((err: any) => {
+    const message = err?.message ?? String(err);
+    errors.push(`resolveUserId: ${message}`);
+    return DEMO_USER_ID;
+  });
 
-  if (badgesResult.status === 'fulfilled') {
-    const { data, error } = badgesResult.value;
-    if (error) {
-      errors.push(error.message ?? 'Failed to load showcased badges.');
-    } else if (data) {
-      badges = data
-        .map((item: any) => item?.badges)
-        .filter(Boolean)
-        .map((badge: any, index: number) => ({
-          id: String(badge.id ?? `badge-${index}`),
-          slug: String(badge.slug ?? `badge-${index}`),
-          name: badge.name ?? 'Badge',
-          tier: badge.tier ?? null,
-          type: badge.type ?? null,
-        }));
-    }
-  } else {
-    const reason = badgesResult.reason as Error | undefined;
-    errors.push(reason?.message ?? 'Failed to load showcased badges.');
-  }
+  const [{ profile, error: profileErr }, { badges, error: badgesErr }, { topList, error: topListErr }] =
+    await Promise.all([fetchProfileBasics(userId), fetchBadges(userId), fetchTopList(userId)]);
 
-  if (elevenResult.status === 'fulfilled') {
-    const { data, error } = elevenResult.value;
-    if (error) {
-      errors.push(error.message ?? 'Failed to load 11/10 highlight.');
-    } else if (data) {
-      eleven = {
-        title: data.anime?.title ?? 'Untitled',
-        thumbnail_url: data.anime?.thumbnail_url ?? null,
-        anime: {
-          id: data.anime?.id ?? undefined,
-          title: data.anime?.title ?? 'Untitled',
-          thumbnail_url: data.anime?.thumbnail_url ?? null,
-          tags: (Array.isArray(data.anime?.tags) ? data.anime?.tags : null) as string[] | null,
-        },
-      };
-    }
-  } else {
-    const reason = elevenResult.reason as Error | undefined;
-    errors.push(reason?.message ?? 'Failed to load 11/10 highlight.');
-  }
-
-  if (topListResult.status === 'fulfilled') {
-    const { data, error } = topListResult.value;
-    if (error) {
-      errors.push(error.message ?? 'Failed to load top list.');
-    } else if (data) {
-      topList = data.map((item: any) => ({
-        position: item.position,
-        title: item.anime?.title ?? 'Untitled',
-        thumbnail_url: item.anime?.thumbnail_url ?? null,
-        note: item.note ?? null,
-        anime: {
-          id: item.anime?.id ?? undefined,
-          title: item.anime?.title ?? 'Untitled',
-          thumbnail_url: item.anime?.thumbnail_url ?? null,
-        },
-      }));
-    }
-  } else {
-    const reason = topListResult.reason as Error | undefined;
-    errors.push(reason?.message ?? 'Failed to load top list.');
-  }
-
-  if (socialsResult.status === 'fulfilled') {
-    const { data, error } = socialsResult.value;
-    if (error) {
-      errors.push(error.message ?? 'Failed to load social links.');
-    } else if (data) {
-      socialLinks = data.map((item: any) => ({
-        platform: item.platform as SocialLink['platform'],
-        url: item.url,
-      }));
-    }
-  } else {
-    const reason = socialsResult.reason as Error | undefined;
-    errors.push(reason?.message ?? 'Failed to load social links.');
-  }
-
-  if (watchedResult.status === 'fulfilled') {
-    const { count, error } = watchedResult.value as { count?: number; error?: { message?: string } };
-    if (error) {
-      errors.push(error.message ?? 'Failed to load watched count.');
-    } else {
-      watchedCount = count ?? 0;
-    }
-  } else {
-    const reason = watchedResult.reason as Error | undefined;
-    errors.push(reason?.message ?? 'Failed to load watched count.');
-  }
-
-  if (reviewedResult.status === 'fulfilled') {
-    const { count, error } = reviewedResult.value as { count?: number; error?: { message?: string } };
-    if (error) {
-      errors.push(error.message ?? 'Failed to load reviewed count.');
-    } else {
-      reviewedCount = count ?? 0;
-    }
-  } else {
-    const reason = reviewedResult.reason as Error | undefined;
-    errors.push(reason?.message ?? 'Failed to load reviewed count.');
-  }
+  if (profileErr) errors.push(`profile: ${profileErr}`);
+  if (badgesErr) errors.push(`badges: ${badgesErr}`);
+  if (topListErr) errors.push(`topList: ${topListErr}`);
 
   const error = errors.length ? errors.join(' | ') : undefined;
 
+  console.log('[profile] profile:', profile);
+  console.log('[profile] badges:', badges.length);
+  console.log('[profile] topList:', topList.length);
+
   return {
-    user,
+    profile,
     badges,
-    eleven,
     topList,
-    socialLinks,
-    displayName,
-    handle: derivedHandle,
-    bio,
-    showSocials,
-    socials,
-    avatarUrl,
-    stats: {
-      watchedCount,
-      reviewedCount,
-      accountScore: user?.exp ?? 0,
-    },
-    isOwner,
     error,
   };
 }
 
-function useProfileData(userId?: string) {
-  const currentUserQuery = useQuery({
-    queryKey: ['current-user-id'],
-    queryFn: getCurrentUserId,
-    enabled: !userId,
-    staleTime: Infinity,
+export function useProfileData() {
+  const query = useQuery<HookResult>({
+    queryKey: ['profile', 'demo'],
+    queryFn: loadProfileData,
+    refetchOnReconnect: false,
+    refetchOnWindowFocus: false,
+    staleTime: 0,
   });
 
-  const resolvedUserId = userId ?? currentUserQuery.data;
+  useEffect(() => {
+    if (query.data?.error) {
+      console.warn('[profile] aggregated error:', query.data.error);
+    }
+  }, [query.data?.error]);
 
-  const profileQuery = useQuery({
-    queryKey: ['profile', resolvedUserId, currentUserQuery.data ?? null],
-    queryFn: () => fetchProfileBundle(resolvedUserId as string, currentUserQuery.data ?? null),
-    enabled: Boolean(resolvedUserId),
-  });
-
-  const data = useMemo(() => profileQuery.data ?? EMPTY_DATA, [profileQuery.data]);
-  const loading = currentUserQuery.isLoading || profileQuery.isLoading || profileQuery.isFetching;
-  const errorMessages: string[] = [];
-
-  if (currentUserQuery.error instanceof Error) {
-    errorMessages.push(currentUserQuery.error.message);
-  }
-  if (data.error) {
-    errorMessages.push(data.error);
-  }
-
-  const error = errorMessages.length ? errorMessages.join(' | ') : undefined;
-
-  const refetch = async () => {
-    await profileQuery.refetch();
-  };
-
-  return {
-    loading,
-    error,
-    errorText: error,
-    user: data.user,
-    badges: data.badges ?? [],
-    eleven: data.eleven,
-    topList: data.topList ?? [],
-    socialLinks: data.socialLinks ?? [],
-    displayName: data.displayName,
-    handle: data.handle,
-    bio: data.bio,
-    showSocials: data.showSocials,
-    socials: data.socials,
-    avatarUrl: data.avatarUrl,
-    stats: data.stats,
-    isOwner: data.isOwner,
-    refetch,
-  };
+  return query;
 }
 
-export { useProfileData };
 export default useProfileData;
