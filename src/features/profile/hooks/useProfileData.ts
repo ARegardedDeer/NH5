@@ -6,34 +6,54 @@ import { getCurrentUserId } from '../../../state/currentUser';
 export interface ProfileUser {
   id: string;
   username: string;
-  avatar_url: string | null;
-  level: number | null;
+  handle?: string | null;
+  avatar_url?: string | null;
+  level?: number | null;
+  exp?: number | null;
+  bio?: string | null;
+  show_level?: boolean;
+  show_socials?: boolean;
 }
 
 export interface ProfileDetails {
-  bio: string | null;
-  show_level: boolean;
-  show_socials: boolean;
+  display_name?: string | null;
+  bio?: string | null;
+  avatar_url?: string | null;
+  show_socials?: boolean;
+  social_youtube?: string | null;
+  social_twitch?: string | null;
+  social_x?: string | null;
 }
 
 export interface ProfileBadge {
   id: string;
+  slug: string;
   name: string;
-  icon: string | null;
+  tier?: number | null;
+  type?: string | null;
 }
 
 export interface ElevenHighlight {
-  id: string;
-  title: string;
-  thumbnail_url: string | null;
+  title?: string;
+  thumbnail_url?: string | null;
+  anime?: {
+    id?: string;
+    title?: string;
+    thumbnail_url?: string | null;
+    tags?: string[] | null;
+  };
 }
 
 export interface TopListEntry {
-  id: string;
   position: number;
-  title: string;
-  thumbnail_url: string | null;
-  note: string | null;
+  title?: string;
+  thumbnail_url?: string | null;
+  note?: string | null;
+  anime?: {
+    id?: string;
+    title?: string;
+    thumbnail_url?: string | null;
+  };
 }
 
 export interface SocialLink {
@@ -41,143 +61,295 @@ export interface SocialLink {
   url: string;
 }
 
-export interface ProfileDataResult {
-  user: ProfileUser | null;
-  profile: ProfileDetails | null;
-  badges: ProfileBadge[];
-  eleven: ElevenHighlight | null;
-  topList: TopListEntry[];
-  socials: SocialLink[];
+export interface ProfileStats {
+  watchedCount: number;
+  reviewedCount: number;
+  accountScore: number;
 }
 
-const EMPTY_RESULT: ProfileDataResult = {
-  user: null,
-  profile: null,
+interface ProfileBundle {
+  user?: ProfileUser;
+  profile?: ProfileDetails;
+  badges: ProfileBadge[];
+  eleven?: ElevenHighlight;
+  topList: TopListEntry[];
+  socials: SocialLink[];
+  stats?: ProfileStats;
+  isOwner?: boolean;
+  error?: string;
+}
+
+const EMPTY_DATA: ProfileBundle = {
+  user: undefined,
+  profile: undefined,
   badges: [],
-  eleven: null,
+  eleven: undefined,
   topList: [],
   socials: [],
+  stats: undefined,
+  isOwner: undefined,
+  error: undefined,
 };
 
-async function fetchProfileBundle(userId: string): Promise<ProfileDataResult> {
-  const [
-    userRes,
-    profileRes,
-    badgesRes,
-    elevenRes,
-    topListRes,
-    socialsRes,
-  ] = await Promise.all([
-    supabase
-      .from('users')
-      .select('id, username, avatar_url, level')
-      .eq('id', userId)
-      .maybeSingle(),
-    supabase
-      .from('user_profiles')
-      .select('bio, show_level, show_socials')
-      .eq('user_id', userId)
-      .maybeSingle(),
-    supabase
-      .from('user_badges')
-      .select('id, badge_id, badges(id, name, icon)')
-      .eq('user_id', userId)
-      .eq('is_showcased', true)
-      .order('updated_at', { ascending: true })
-      .limit(5),
-    supabase
-      .from('ratings')
-      .select('id, anime:anime_id (title, thumbnail_url)')
-      .eq('user_id', userId)
-      .eq('is_eleven_out_of_ten', true)
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle(),
-    supabase
-      .from('user_toplist')
-      .select('id, position, note, anime:anime_id (title, thumbnail_url)')
-      .eq('user_id', userId)
-      .order('position', { ascending: true })
-      .limit(10),
-    supabase
-      .from('user_social_links')
-      .select('id, platform, url')
-      .eq('user_id', userId)
-      .in('platform', ['youtube', 'twitch', 'twitter']),
-  ]);
+const normalizeBoolean = (value: unknown | null | undefined) => {
+  if (typeof value === 'boolean') {
+    return value;
+  }
+  if (value === null || value === undefined) {
+    return undefined;
+  }
+  return Boolean(value);
+};
 
-  if (userRes.error) {
-    throw userRes.error;
-  }
-  if (!userRes.data) {
-    throw new Error('User not found for profile view.');
-  }
-  if (profileRes.error) {
-    throw profileRes.error;
-  }
-  if (badgesRes.error) {
-    throw badgesRes.error;
-  }
-  if (elevenRes.error) {
-    throw elevenRes.error;
-  }
-  if (topListRes.error) {
-    throw topListRes.error;
-  }
-  if (socialsRes.error) {
-    throw socialsRes.error;
-  }
+async function fetchProfileBundle(userId: string, currentUserId?: string | null): Promise<ProfileBundle> {
+  const isOwner = Boolean(currentUserId) && currentUserId === userId;
 
-  const badges =
-    badgesRes.data?.slice(0, 5).map((item: any) => {
-      const identifier = item.badge_id ?? item.id ?? item.badges?.id;
-      return {
-        id: String(identifier ?? 'badge'),
-        name: item.badges?.name ?? 'Badge',
-        icon: item.badges?.icon ?? null,
+  const headerPromise = supabase
+    .from('users')
+    .select(
+      `
+        id,
+        username,
+        handle,
+        avatar_url,
+        level,
+        exp,
+        user_profiles(
+          display_name,
+          bio,
+          show_level,
+          show_socials,
+          social_youtube,
+          social_twitch,
+          social_x
+        )
+      `,
+    )
+    .eq('id', userId)
+    .maybeSingle();
+
+  const badgesPromise = supabase
+    .from('user_badges')
+    .select(
+      `
+        is_showcased,
+        unlocked_at,
+        badges:badge_id (
+          id,
+          slug,
+          name,
+          tier,
+          type
+        )
+      `,
+    )
+    .eq('user_id', userId)
+    .eq('is_showcased', true)
+    .order('unlocked_at', { ascending: false })
+    .limit(5);
+
+  const elevenPromise = supabase
+    .from('ratings')
+    .select('anime:anime_id (id, title, thumbnail_url, tags)')
+    .eq('user_id', userId)
+    .eq('is_eleven_out_of_ten', true)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  const topListPromise = supabase
+    .from('user_toplist')
+    .select('position, note, anime:anime_id (title, thumbnail_url)')
+    .eq('user_id', userId)
+    .order('position', { ascending: true })
+    .limit(10);
+
+  const socialsPromise = supabase
+    .from('user_social_links')
+    .select('platform, url')
+    .eq('user_id', userId)
+    .in('platform', ['youtube', 'twitch', 'twitter']);
+
+  const watchedPromise = supabase
+    .from('ratings')
+    .select('anime_id', { head: true, count: 'exact' })
+    .eq('user_id', userId);
+
+  const reviewedPromise = supabase
+    .from('reviews')
+    .select('id', { head: true, count: 'exact' })
+    .eq('user_id', userId);
+
+  const [headerResult, badgesResult, elevenResult, topListResult, socialsResult, watchedResult, reviewedResult] =
+    await Promise.allSettled([headerPromise, badgesPromise, elevenPromise, topListPromise, socialsPromise, watchedPromise, reviewedPromise]);
+
+  const errors: string[] = [];
+  let user: ProfileUser | undefined;
+  let profile: ProfileDetails | undefined;
+  let badges: ProfileBadge[] = [];
+  let eleven: ElevenHighlight | undefined;
+  let topList: TopListEntry[] = [];
+  let socials: SocialLink[] = [];
+  let watchedCount = 0;
+  let reviewedCount = 0;
+
+  if (headerResult.status === 'fulfilled') {
+    const { data, error } = headerResult.value;
+    if (error) {
+      errors.push(error.message ?? 'Failed to load profile header.');
+    } else if (data) {
+      const profileRow = Array.isArray(data.user_profiles) ? data.user_profiles[0] : data.user_profiles;
+      user = {
+        id: data.id,
+        username: data.username,
+        handle: data.handle ?? null,
+        avatar_url: data.avatar_url ?? null,
+        level: data.level ?? null,
+        exp: data.exp ?? null,
+        bio: profileRow?.bio ?? null,
+        show_level: normalizeBoolean(profileRow?.show_level),
+        show_socials: normalizeBoolean(profileRow?.show_socials),
       };
-    }) ?? [];
+      profile = {
+        display_name: profileRow?.display_name ?? null,
+        bio: profileRow?.bio ?? null,
+        avatar_url: data.avatar_url ?? null,
+        show_socials: normalizeBoolean(profileRow?.show_socials),
+        social_youtube: profileRow?.social_youtube ?? null,
+        social_twitch: profileRow?.social_twitch ?? null,
+        social_x: profileRow?.social_x ?? null,
+      };
+    } else {
+      errors.push('Profile header missing.');
+    }
+  } else {
+    const reason = headerResult.reason as Error | undefined;
+    errors.push(reason?.message ?? 'Failed to load profile header.');
+  }
 
-  const eleven = elevenRes.data
-    ? {
-        id: elevenRes.data.id,
-        title: elevenRes.data.anime?.title ?? 'Untitled',
-        thumbnail_url: elevenRes.data.anime?.thumbnail_url ?? null,
-      }
-    : null;
+  if (badgesResult.status === 'fulfilled') {
+    const { data, error } = badgesResult.value;
+    if (error) {
+      errors.push(error.message ?? 'Failed to load showcased badges.');
+    } else if (data) {
+      badges = data
+        .map((item: any) => item?.badges)
+        .filter(Boolean)
+        .map((badge: any, index: number) => ({
+          id: String(badge.id ?? `badge-${index}`),
+          slug: String(badge.slug ?? `badge-${index}`),
+          name: badge.name ?? 'Badge',
+          tier: badge.tier ?? null,
+          type: badge.type ?? null,
+        }));
+    }
+  } else {
+    const reason = badgesResult.reason as Error | undefined;
+    errors.push(reason?.message ?? 'Failed to load showcased badges.');
+  }
 
-  const topList =
-    topListRes.data?.map((item: any) => ({
-      id: item.id ?? `${item.position}-${item.anime?.title ?? 'anime'}`,
-      position: item.position,
-      note: item.note ?? null,
-      title: item.anime?.title ?? 'Untitled',
-      thumbnail_url: item.anime?.thumbnail_url ?? null,
-    })) ?? [];
+  if (elevenResult.status === 'fulfilled') {
+    const { data, error } = elevenResult.value;
+    if (error) {
+      errors.push(error.message ?? 'Failed to load 11/10 highlight.');
+    } else if (data) {
+      eleven = {
+        title: data.anime?.title ?? 'Untitled',
+        thumbnail_url: data.anime?.thumbnail_url ?? null,
+        anime: {
+          id: data.anime?.id ?? undefined,
+          title: data.anime?.title ?? 'Untitled',
+          thumbnail_url: data.anime?.thumbnail_url ?? null,
+          tags: (Array.isArray(data.anime?.tags) ? data.anime?.tags : null) as string[] | null,
+        },
+      };
+    }
+  } else {
+    const reason = elevenResult.reason as Error | undefined;
+    errors.push(reason?.message ?? 'Failed to load 11/10 highlight.');
+  }
 
-  const socials =
-    socialsRes.data?.map((item: any) => ({
-      platform: item.platform as SocialLink['platform'],
-      url: item.url,
-    })) ?? [];
+  if (topListResult.status === 'fulfilled') {
+    const { data, error } = topListResult.value;
+    if (error) {
+      errors.push(error.message ?? 'Failed to load top list.');
+    } else if (data) {
+      topList = data.map((item: any) => ({
+        position: item.position,
+        title: item.anime?.title ?? 'Untitled',
+        thumbnail_url: item.anime?.thumbnail_url ?? null,
+        note: item.note ?? null,
+        anime: {
+          id: item.anime?.id ?? undefined,
+          title: item.anime?.title ?? 'Untitled',
+          thumbnail_url: item.anime?.thumbnail_url ?? null,
+        },
+      }));
+    }
+  } else {
+    const reason = topListResult.reason as Error | undefined;
+    errors.push(reason?.message ?? 'Failed to load top list.');
+  }
+
+  if (socialsResult.status === 'fulfilled') {
+    const { data, error } = socialsResult.value;
+    if (error) {
+      errors.push(error.message ?? 'Failed to load social links.');
+    } else if (data) {
+      socials = data.map((item: any) => ({
+        platform: item.platform as SocialLink['platform'],
+        url: item.url,
+      }));
+    }
+  } else {
+    const reason = socialsResult.reason as Error | undefined;
+    errors.push(reason?.message ?? 'Failed to load social links.');
+  }
+
+  if (watchedResult.status === 'fulfilled') {
+    const { count, error } = watchedResult.value as { count?: number; error?: { message?: string } };
+    if (error) {
+      errors.push(error.message ?? 'Failed to load watched count.');
+    } else {
+      watchedCount = count ?? 0;
+    }
+  } else {
+    const reason = watchedResult.reason as Error | undefined;
+    errors.push(reason?.message ?? 'Failed to load watched count.');
+  }
+
+  if (reviewedResult.status === 'fulfilled') {
+    const { count, error } = reviewedResult.value as { count?: number; error?: { message?: string } };
+    if (error) {
+      errors.push(error.message ?? 'Failed to load reviewed count.');
+    } else {
+      reviewedCount = count ?? 0;
+    }
+  } else {
+    const reason = reviewedResult.reason as Error | undefined;
+    errors.push(reason?.message ?? 'Failed to load reviewed count.');
+  }
+
+  const error = errors.length ? errors.join(' | ') : undefined;
 
   return {
-    user: userRes.data,
-    profile: profileRes.data
-      ? {
-          bio: profileRes.data.bio ?? null,
-          show_level: Boolean(profileRes.data.show_level),
-          show_socials: Boolean(profileRes.data.show_socials),
-        }
-      : null,
+    user,
+    profile,
     badges,
     eleven,
     topList,
     socials,
+    stats: {
+      watchedCount,
+      reviewedCount,
+      accountScore: user?.exp ?? 0,
+    },
+    isOwner,
+    error,
   };
 }
 
-export function useProfileData(userId?: string) {
+function useProfileData(userId?: string) {
   const currentUserQuery = useQuery({
     queryKey: ['current-user-id'],
     queryFn: getCurrentUserId,
@@ -188,19 +360,43 @@ export function useProfileData(userId?: string) {
   const resolvedUserId = userId ?? currentUserQuery.data;
 
   const profileQuery = useQuery({
-    queryKey: ['profile', resolvedUserId],
-    queryFn: () => fetchProfileBundle(resolvedUserId as string),
+    queryKey: ['profile', resolvedUserId, currentUserQuery.data ?? null],
+    queryFn: () => fetchProfileBundle(resolvedUserId as string, currentUserQuery.data ?? null),
     enabled: Boolean(resolvedUserId),
   });
 
+  const data = useMemo(() => profileQuery.data ?? EMPTY_DATA, [profileQuery.data]);
   const loading = currentUserQuery.isLoading || profileQuery.isLoading || profileQuery.isFetching;
-  const error = (currentUserQuery.error as Error) ?? (profileQuery.error as Error) ?? null;
-  const data = useMemo(() => profileQuery.data ?? EMPTY_RESULT, [profileQuery.data]);
+  const errorMessages: string[] = [];
+
+  if (currentUserQuery.error instanceof Error) {
+    errorMessages.push(currentUserQuery.error.message);
+  }
+  if (data.error) {
+    errorMessages.push(data.error);
+  }
+
+  const error = errorMessages.length ? errorMessages.join(' | ') : undefined;
+
+  const refetch = async () => {
+    await profileQuery.refetch();
+  };
 
   return {
     loading,
     error,
-    ...data,
-    refetch: profileQuery.refetch,
+    errorText: error,
+    user: data.user,
+    profile: data.profile,
+    badges: data.badges ?? [],
+    eleven: data.eleven,
+    topList: data.topList ?? [],
+    socials: data.socials ?? [],
+    stats: data.stats,
+    isOwner: data.isOwner,
+    refetch,
   };
 }
+
+export { useProfileData };
+export default useProfileData;
