@@ -93,16 +93,6 @@ const EMPTY_DATA: ProfileBundle = {
   error: undefined,
 };
 
-const normalizeBoolean = (value: unknown | null | undefined) => {
-  if (typeof value === 'boolean') {
-    return value;
-  }
-  if (value === null || value === undefined) {
-    return undefined;
-  }
-  return Boolean(value);
-};
-
 async function fetchProfileBundle(userId: string, currentUserId?: string | null): Promise<ProfileBundle> {
   const isOwner = Boolean(currentUserId) && currentUserId === userId;
 
@@ -115,14 +105,7 @@ async function fetchProfileBundle(userId: string, currentUserId?: string | null)
         exp,
         level,
         avatar_url,
-        user_profiles:user_profiles!left (
-          handle,
-          bio,
-          show_socials,
-          twitch,
-          x,
-          youtube
-        )
+        user_profiles:user_profiles!left (*)
       `,
     )
     .eq('id', userId)
@@ -209,16 +192,17 @@ async function fetchProfileBundle(userId: string, currentUserId?: string | null)
     if (error) {
       errors.push(error.message ?? 'Failed to load profile header.');
     } else if (data) {
-      const profileRow = Array.isArray(data.user_profiles) ? data.user_profiles[0] : data.user_profiles;
+      const upRaw = (data as any)?.user_profiles ?? {};
+      const up = Array.isArray(upRaw) ? upRaw[0] ?? {} : upRaw ?? {};
       const username = data.username ?? 'NH Explorer';
       displayName = username;
-      derivedHandle = profileRow?.handle ?? username ?? undefined;
-      bio = profileRow?.bio ?? null;
-      showSocials = normalizeBoolean(profileRow?.show_socials);
+      derivedHandle = (up?.handle ?? username ?? undefined) as string | undefined;
+      bio = (up?.bio ?? null) as string | null;
+      showSocials = !!up?.show_socials;
       socials = {
-        twitch: profileRow?.twitch ?? null,
-        x: profileRow?.x ?? null,
-        youtube: profileRow?.youtube ?? null,
+        twitch: (up?.twitch ?? null) as string | null,
+        x: (up?.x ?? null) as string | null,
+        youtube: (up?.youtube ?? null) as string | null,
       };
       avatarUrl = data.avatar_url ?? null;
       user = {
