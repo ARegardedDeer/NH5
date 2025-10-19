@@ -1,10 +1,22 @@
-import React, { PropsWithChildren } from 'react';
-import { View, Text } from 'react-native';
+import React, { ReactNode } from 'react';
+import { View, Text, ViewProps } from 'react-native';
 
-export function SectionTitle({ children }: PropsWithChildren) {
-  return <Text className="px-4 pt-5 pb-2 text-[22px] font-bold text-white">{children}</Text>;
+type Props = ViewProps & {
+  title: string;
+  children: ReactNode;
+  dark?: boolean;
+  className?: string;
+};
+
+export default function Section({ title, children, dark = true, className, ...rest }: Props) {
+  return (
+    <View
+      className={`rounded-2xl ${dark ? 'bg-card border border-cardBorder' : 'bg-white'} p-4 ${className ?? ''}`}
+      {...rest}
+    >
+      <Text className={`mb-2 font-semibold ${dark ? 'text-white' : 'text-black'}`}>{title}</Text>
+      {children}
+    </View>
+  );
 }
 
-export function Card({ children }: PropsWithChildren) {
-  return <View className="mx-4 my-2 rounded-xl bg-zinc-900/80 p-4">{children}</View>;
-}

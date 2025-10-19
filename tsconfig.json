@@ -15,7 +15,7 @@
       "@state/*": ["src/state/*"],
       "@ui/*": ["src/ui/*"]
     },
-    "types": ["jest"]
+    "types": ["jest", "nativewind/types"]
   },
   "include": ["src", "index.js", "index.ts", "index.tsx", "jest.setup.ts", "jest.setup.js"],
   "exclude": ["node_modules", "babel.config.js", "metro.config.js"]

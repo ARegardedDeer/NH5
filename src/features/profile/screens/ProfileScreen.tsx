@@ -1,7 +1,7 @@
 import React from "react";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { ScrollView, View, Text, RefreshControl, StyleSheet } from "react-native";
-import useProfileData from "../../hooks/useProfileData";
+import useProfileData from "../hooks/useProfileData";
 import Avatar from "../../../ui/components/Avatar";
 import Section from "../../../ui/components/Section";
 import ProgressBar from "../../../ui/components/ProgressBar";
