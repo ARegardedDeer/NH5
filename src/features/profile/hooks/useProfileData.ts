@@ -10,19 +10,7 @@ export interface ProfileUser {
   avatar_url?: string | null;
   level?: number | null;
   exp?: number | null;
-  bio?: string | null;
-  show_level?: boolean;
   show_socials?: boolean;
-}
-
-export interface ProfileDetails {
-  display_name?: string | null;
-  bio?: string | null;
-  avatar_url?: string | null;
-  show_socials?: boolean;
-  social_youtube?: string | null;
-  social_twitch?: string | null;
-  social_x?: string | null;
 }
 
 export interface ProfileBadge {
@@ -69,11 +57,20 @@ export interface ProfileStats {
 
 interface ProfileBundle {
   user?: ProfileUser;
-  profile?: ProfileDetails;
   badges: ProfileBadge[];
   eleven?: ElevenHighlight;
   topList: TopListEntry[];
-  socials: SocialLink[];
+  socialLinks: SocialLink[];
+  displayName?: string;
+  handle?: string;
+  bio?: string | null;
+  showSocials?: boolean;
+  socials?: {
+    twitch?: string | null;
+    x?: string | null;
+    youtube?: string | null;
+  };
+  avatarUrl?: string | null;
   stats?: ProfileStats;
   isOwner?: boolean;
   error?: string;
@@ -81,11 +78,16 @@ interface ProfileBundle {
 
 const EMPTY_DATA: ProfileBundle = {
   user: undefined,
-  profile: undefined,
   badges: [],
   eleven: undefined,
   topList: [],
-  socials: [],
+  socialLinks: [],
+  displayName: undefined,
+  handle: undefined,
+  bio: undefined,
+  showSocials: undefined,
+  socials: undefined,
+  avatarUrl: undefined,
   stats: undefined,
   isOwner: undefined,
   error: undefined,
@@ -110,18 +112,16 @@ async function fetchProfileBundle(userId: string, currentUserId?: string | null)
       `
         id,
         username,
-        handle,
-        avatar_url,
-        level,
         exp,
-        user_profiles(
-          display_name,
+        level,
+        avatar_url,
+        user_profiles:user_profiles!left (
+          handle,
           bio,
-          show_level,
           show_socials,
-          social_youtube,
-          social_twitch,
-          social_x
+          twitch,
+          x,
+          youtube
         )
       `,
     )
@@ -185,11 +185,22 @@ async function fetchProfileBundle(userId: string, currentUserId?: string | null)
 
   const errors: string[] = [];
   let user: ProfileUser | undefined;
-  let profile: ProfileDetails | undefined;
   let badges: ProfileBadge[] = [];
   let eleven: ElevenHighlight | undefined;
   let topList: TopListEntry[] = [];
-  let socials: SocialLink[] = [];
+  let socialLinks: SocialLink[] = [];
+  let displayName: string | undefined;
+  let derivedHandle: string | undefined;
+  let bio: string | null | undefined;
+  let showSocials: boolean | undefined;
+  let socials:
+    | {
+        twitch?: string | null;
+        x?: string | null;
+        youtube?: string | null;
+      }
+    | undefined;
+  let avatarUrl: string | null | undefined;
   let watchedCount = 0;
   let reviewedCount = 0;
 
@@ -199,25 +210,25 @@ async function fetchProfileBundle(userId: string, currentUserId?: string | null)
       errors.push(error.message ?? 'Failed to load profile header.');
     } else if (data) {
       const profileRow = Array.isArray(data.user_profiles) ? data.user_profiles[0] : data.user_profiles;
+      const username = data.username ?? 'NH Explorer';
+      displayName = username;
+      derivedHandle = profileRow?.handle ?? username ?? undefined;
+      bio = profileRow?.bio ?? null;
+      showSocials = normalizeBoolean(profileRow?.show_socials);
+      socials = {
+        twitch: profileRow?.twitch ?? null,
+        x: profileRow?.x ?? null,
+        youtube: profileRow?.youtube ?? null,
+      };
+      avatarUrl = data.avatar_url ?? null;
       user = {
         id: data.id,
         username: data.username,
-        handle: data.handle ?? null,
+        handle: derivedHandle ?? null,
         avatar_url: data.avatar_url ?? null,
         level: data.level ?? null,
         exp: data.exp ?? null,
-        bio: profileRow?.bio ?? null,
-        show_level: normalizeBoolean(profileRow?.show_level),
-        show_socials: normalizeBoolean(profileRow?.show_socials),
-      };
-      profile = {
-        display_name: profileRow?.display_name ?? null,
-        bio: profileRow?.bio ?? null,
-        avatar_url: data.avatar_url ?? null,
-        show_socials: normalizeBoolean(profileRow?.show_socials),
-        social_youtube: profileRow?.social_youtube ?? null,
-        social_twitch: profileRow?.social_twitch ?? null,
-        social_x: profileRow?.social_x ?? null,
+        show_socials: showSocials,
       };
     } else {
       errors.push('Profile header missing.');
@@ -296,7 +307,7 @@ async function fetchProfileBundle(userId: string, currentUserId?: string | null)
     if (error) {
       errors.push(error.message ?? 'Failed to load social links.');
     } else if (data) {
-      socials = data.map((item: any) => ({
+      socialLinks = data.map((item: any) => ({
         platform: item.platform as SocialLink['platform'],
         url: item.url,
       }));
@@ -334,11 +345,16 @@ async function fetchProfileBundle(userId: string, currentUserId?: string | null)
 
   return {
     user,
-    profile,
     badges,
     eleven,
     topList,
+    socialLinks,
+    displayName,
+    handle: derivedHandle,
+    bio,
+    showSocials,
     socials,
+    avatarUrl,
     stats: {
       watchedCount,
       reviewedCount,
@@ -387,11 +403,16 @@ function useProfileData(userId?: string) {
     error,
     errorText: error,
     user: data.user,
-    profile: data.profile,
     badges: data.badges ?? [],
     eleven: data.eleven,
     topList: data.topList ?? [],
-    socials: data.socials ?? [],
+    socialLinks: data.socialLinks ?? [],
+    displayName: data.displayName,
+    handle: data.handle,
+    bio: data.bio,
+    showSocials: data.showSocials,
+    socials: data.socials,
+    avatarUrl: data.avatarUrl,
     stats: data.stats,
     isOwner: data.isOwner,
     refetch,

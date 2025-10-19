@@ -1,50 +1,46 @@
 import React from 'react';
-import { Image, Text, View } from 'react-native';
-import type { ProfileDetails, ProfileUser } from '../hooks/useProfileData';
+import { Pressable, Text, View } from 'react-native';
+import Avatar from '../../../ui/components/Avatar';
 
 type ProfileHeaderProps = {
-  user: ProfileUser | null;
-  profile: ProfileDetails | null;
+  displayName: string;
+  level?: number | null;
+  handle?: string | null;
+  bio?: string | null;
+  avatarUrl?: string | null;
+  canEdit?: boolean;
+  onPressEdit?: () => void;
 };
 
-export function ProfileHeader({ user, profile }: ProfileHeaderProps) {
-  const initials = user?.username?.slice(0, 2).toUpperCase() ?? 'NH';
-  const displayName = user?.username ?? 'Explorer';
-  const showLevel = Boolean(profile?.show_level && typeof user?.level === 'number');
+export function ProfileHeader({
+  displayName,
+  level,
+  handle,
+  bio,
+  avatarUrl,
+  canEdit,
+  onPressEdit,
+}: ProfileHeaderProps) {
+  const showLevel = typeof level === 'number' && Number.isFinite(level);
 
   return (
-    <View className="border border-white/10 bg-white/5 p-4 rounded-xl" testID="ProfileHeader">
-      <View className="flex-row items-center">
-        {user?.avatar_url ? (
-          <Image
-            source={{ uri: user.avatar_url }}
-            className="h-20 w-20 rounded-full border border-white/10 bg-black/40"
-          />
-        ) : (
-          <View className="h-20 w-20 items-center justify-center rounded-full border border-white/10 bg-black/40">
-            <Text className="text-xl font-semibold text-white/80">{initials}</Text>
-          </View>
-        )}
-        <View className="ml-4 flex-1">
-          <View className="flex-row items-center justify-between">
-            <Text className="text-lg font-semibold text-white">{displayName}</Text>
-            {showLevel ? (
-              <View className="rounded-full bg-white/10 px-3 py-1">
-                <Text className="text-xs font-medium text-white/80">{`Lvl ${user?.level ?? 0}`}</Text>
-              </View>
-            ) : null}
-          </View>
-          {user?.username ? (
-            <Text className="mt-1 text-sm text-white/50">@{user.username}</Text>
-          ) : null}
+    <View className="px-4 pt-6 pb-3 flex-row items-center justify-between" testID="ProfileHeader">
+      <View className="flex-row items-center gap-4">
+        <Avatar name={displayName} uri={avatarUrl || null} size={84} />
+        <View className="flex-1">
+          <Text className="text-white text-2xl font-bold">{displayName}</Text>
+          {!!handle && <Text className="text-white/70">@{handle}</Text>}
+          {showLevel ? <Text className="text-white/60 mt-1">Level {level}</Text> : null}
+          {!!bio && <Text className="text-white/80 mt-1">{bio}</Text>}
         </View>
       </View>
-      {profile?.bio ? (
-        <Text className="mt-3 text-sm leading-5 text-white/80">{profile.bio}</Text>
+      {canEdit ? (
+        <Pressable onPress={onPressEdit} className="rounded-full bg-purple-600 px-4 py-2">
+          <Text className="text-white font-semibold">Edit</Text>
+        </Pressable>
       ) : null}
     </View>
   );
 }
 
 export default ProfileHeader;
-

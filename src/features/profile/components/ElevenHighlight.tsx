@@ -3,7 +3,7 @@ import { Image, Text, View } from 'react-native';
 import type { ElevenHighlight as ElevenHighlightType } from '../hooks/useProfileData';
 
 type ElevenHighlightProps = {
-  eleven: ElevenHighlightType | null;
+  eleven?: ElevenHighlightType;
 };
 
 export function ElevenHighlight({ eleven }: ElevenHighlightProps) {
@@ -36,4 +36,3 @@ export function ElevenHighlight({ eleven }: ElevenHighlightProps) {
 }
 
 export default ElevenHighlight;
-

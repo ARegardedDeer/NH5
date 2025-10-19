@@ -14,9 +14,9 @@ export function TopList({ items }: TopListProps) {
       <Text className="text-base font-semibold text-white">Top List</Text>
       {hasItems ? (
         <View className="mt-3 flex-col gap-3">
-          {items.map((item) => (
+          {items.map((item, index) => (
             <View
-              key={item.id}
+              key={`${item.position}-${item.title}-${index}`}
               className="flex-row items-center gap-3 rounded-xl border border-white/10 bg-black/40 p-3"
             >
               <View className="h-8 w-8 items-center justify-center rounded-full bg-white/10">
@@ -46,4 +46,3 @@ export function TopList({ items }: TopListProps) {
 }
 
 export default TopList;
-

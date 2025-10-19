@@ -10,8 +10,8 @@
 		13B07FBF1A68108700A75B9A /* Images.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 13B07FB51A68108700A75B9A /* Images.xcassets */; };
 		761780ED2CA45674006654EE /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 761780EC2CA45674006654EE /* AppDelegate.swift */; };
 		81AB9BB82411601600AC10FF /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 81AB9BB72411601600AC10FF /* LaunchScreen.storyboard */; };
+		AC6F7BBB0459D367533EA3E2 /* libPods-NH5.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 8499EA8ECCED96169BA36409 /* libPods-NH5.a */; };
 		CD7CEF1DCAF68CBF4BA5016B /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 13B07FB81A68108700A75B9A /* PrivacyInfo.xcprivacy */; };
-		E93C884EF42C8923C8B2C070 /* libPods-NH5.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 36F8E55661AECE3A76731516 /* libPods-NH5.a */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -19,11 +19,11 @@
 		13B07FB51A68108700A75B9A /* Images.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; name = Images.xcassets; path = NH5/Images.xcassets; sourceTree = "<group>"; };
 		13B07FB61A68108700A75B9A /* Info.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; name = Info.plist; path = NH5/Info.plist; sourceTree = "<group>"; };
 		13B07FB81A68108700A75B9A /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; name = PrivacyInfo.xcprivacy; path = NH5/PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
-		36F8E55661AECE3A76731516 /* libPods-NH5.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-NH5.a"; sourceTree = BUILT_PRODUCTS_DIR; };
 		761780EC2CA45674006654EE /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AppDelegate.swift; path = NH5/AppDelegate.swift; sourceTree = "<group>"; };
 		81AB9BB72411601600AC10FF /* LaunchScreen.storyboard */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.storyboard; name = LaunchScreen.storyboard; path = NH5/LaunchScreen.storyboard; sourceTree = "<group>"; };
-		ADEA0D99A7F7F9EA893300B1 /* Pods-NH5.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-NH5.debug.xcconfig"; path = "Target Support Files/Pods-NH5/Pods-NH5.debug.xcconfig"; sourceTree = "<group>"; };
-		C60992EDF4E5B54872902F2D /* Pods-NH5.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-NH5.release.xcconfig"; path = "Target Support Files/Pods-NH5/Pods-NH5.release.xcconfig"; sourceTree = "<group>"; };
+		8499EA8ECCED96169BA36409 /* libPods-NH5.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-NH5.a"; sourceTree = BUILT_PRODUCTS_DIR; };
+		CA9A29D2F278BCA306F4A6CA /* Pods-NH5.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-NH5.debug.xcconfig"; path = "Target Support Files/Pods-NH5/Pods-NH5.debug.xcconfig"; sourceTree = "<group>"; };
+		E30F08E525F0D5DD8F888449 /* Pods-NH5.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-NH5.release.xcconfig"; path = "Target Support Files/Pods-NH5/Pods-NH5.release.xcconfig"; sourceTree = "<group>"; };
 		ED297162215061F000B7C4FE /* JavaScriptCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = JavaScriptCore.framework; path = System/Library/Frameworks/JavaScriptCore.framework; sourceTree = SDKROOT; };
 /* End PBXFileReference section */
 
@@ -32,7 +32,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				E93C884EF42C8923C8B2C070 /* libPods-NH5.a in Frameworks */,
+				AC6F7BBB0459D367533EA3E2 /* libPods-NH5.a in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -55,7 +55,7 @@
 			isa = PBXGroup;
 			children = (
 				ED297162215061F000B7C4FE /* JavaScriptCore.framework */,
-				36F8E55661AECE3A76731516 /* libPods-NH5.a */,
+				8499EA8ECCED96169BA36409 /* libPods-NH5.a */,
 			);
 			name = Frameworks;
 			sourceTree = "<group>";
@@ -93,8 +93,8 @@
 		BBD78D7AC51CEA395F1C20DB /* Pods */ = {
 			isa = PBXGroup;
 			children = (
-				ADEA0D99A7F7F9EA893300B1 /* Pods-NH5.debug.xcconfig */,
-				C60992EDF4E5B54872902F2D /* Pods-NH5.release.xcconfig */,
+				CA9A29D2F278BCA306F4A6CA /* Pods-NH5.debug.xcconfig */,
+				E30F08E525F0D5DD8F888449 /* Pods-NH5.release.xcconfig */,
 			);
 			path = Pods;
 			sourceTree = "<group>";
@@ -114,13 +114,13 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = 13B07F931A680F5B00A75B9A /* Build configuration list for PBXNativeTarget "NH5" */;
 			buildPhases = (
-				4B834C2A06272759B063BB26 /* [CP] Check Pods Manifest.lock */,
+				5E41FB8C7B920482111FF57E /* [CP] Check Pods Manifest.lock */,
 				13B07F871A680F5B00A75B9A /* Sources */,
 				13B07F8C1A680F5B00A75B9A /* Frameworks */,
 				13B07F8E1A680F5B00A75B9A /* Resources */,
 				00DD1BFF1BD5951E006B06BC /* Bundle React Native code and images */,
-				8B2B353EAC80B5240DAD9309 /* [CP] Embed Pods Frameworks */,
-				302728CC430CFA5375E0BDC7 /* [CP] Copy Pods Resources */,
+				95CFA91DE172688E95EA68BE /* [CP] Embed Pods Frameworks */,
+				BCB9ECC247357E26A0A91583 /* [CP] Copy Pods Resources */,
 			);
 			buildRules = (
 			);
@@ -192,24 +192,7 @@
 			shellPath = /bin/sh;
 			shellScript = "set -e\n\nWITH_ENVIRONMENT=\"$REACT_NATIVE_PATH/scripts/xcode/with-environment.sh\"\nREACT_NATIVE_XCODE=\"$REACT_NATIVE_PATH/scripts/react-native-xcode.sh\"\n\n/bin/sh -c \"$WITH_ENVIRONMENT $REACT_NATIVE_XCODE\"\n";
 		};
-		302728CC430CFA5375E0BDC7 /* [CP] Copy Pods Resources */ = {
-			isa = PBXShellScriptBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			inputFileListPaths = (
-				"${PODS_ROOT}/Target Support Files/Pods-NH5/Pods-NH5-resources-${CONFIGURATION}-input-files.xcfilelist",
-			);
-			name = "[CP] Copy Pods Resources";
-			outputFileListPaths = (
-				"${PODS_ROOT}/Target Support Files/Pods-NH5/Pods-NH5-resources-${CONFIGURATION}-output-files.xcfilelist",
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-			shellPath = /bin/sh;
-			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-NH5/Pods-NH5-resources.sh\"\n";
-			showEnvVarsInLog = 0;
-		};
-		4B834C2A06272759B063BB26 /* [CP] Check Pods Manifest.lock */ = {
+		5E41FB8C7B920482111FF57E /* [CP] Check Pods Manifest.lock */ = {
 			isa = PBXShellScriptBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -231,7 +214,7 @@
 			shellScript = "diff \"${PODS_PODFILE_DIR_PATH}/Podfile.lock\" \"${PODS_ROOT}/Manifest.lock\" > /dev/null\nif [ $? != 0 ] ; then\n    # print error to STDERR\n    echo \"error: The sandbox is not in sync with the Podfile.lock. Run 'pod install' or update your CocoaPods installation.\" >&2\n    exit 1\nfi\n# This output is used by Xcode 'outputs' to avoid re-running this script phase.\necho \"SUCCESS\" > \"${SCRIPT_OUTPUT_FILE_0}\"\n";
 			showEnvVarsInLog = 0;
 		};
-		8B2B353EAC80B5240DAD9309 /* [CP] Embed Pods Frameworks */ = {
+		95CFA91DE172688E95EA68BE /* [CP] Embed Pods Frameworks */ = {
 			isa = PBXShellScriptBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -246,6 +229,23 @@
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
 			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-NH5/Pods-NH5-frameworks.sh\"\n";
+			showEnvVarsInLog = 0;
+		};
+		BCB9ECC247357E26A0A91583 /* [CP] Copy Pods Resources */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+				"${PODS_ROOT}/Target Support Files/Pods-NH5/Pods-NH5-resources-${CONFIGURATION}-input-files.xcfilelist",
+			);
+			name = "[CP] Copy Pods Resources";
+			outputFileListPaths = (
+				"${PODS_ROOT}/Target Support Files/Pods-NH5/Pods-NH5-resources-${CONFIGURATION}-output-files.xcfilelist",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-NH5/Pods-NH5-resources.sh\"\n";
 			showEnvVarsInLog = 0;
 		};
 /* End PBXShellScriptBuildPhase section */
@@ -264,7 +264,7 @@
 /* Begin XCBuildConfiguration section */
 		13B07F941A680F5B00A75B9A /* Debug */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = ADEA0D99A7F7F9EA893300B1 /* Pods-NH5.debug.xcconfig */;
+			baseConfigurationReference = CA9A29D2F278BCA306F4A6CA /* Pods-NH5.debug.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
@@ -292,7 +292,7 @@
 		};
 		13B07F951A680F5B00A75B9A /* Release */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = C60992EDF4E5B54872902F2D /* Pods-NH5.release.xcconfig */;
+			baseConfigurationReference = E30F08E525F0D5DD8F888449 /* Pods-NH5.release.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;

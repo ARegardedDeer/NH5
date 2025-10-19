@@ -1,41 +1,49 @@
 import React from 'react';
 import { View, Text, ScrollView, Pressable } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
-import Avatar from '../../../ui/components/Avatar';
 import PosterImage from '../../../ui/components/PosterImage';
 import ProgressBar from '../../../ui/components/ProgressBar';
 import { SectionTitle, Card } from '../../../ui/components/Section';
+import ProfileHeader from '../components/ProfileHeader';
 import useProfileData from '../hooks/useProfileData';
 
 export default function ProfileScreen() {
   const nav = useNavigation<any>();
-  const { user, profile, badges = [], eleven, topList = [], stats, errorText, isOwner } = useProfileData();
+  const {
+    user,
+    badges = [],
+    eleven,
+    topList = [],
+    stats,
+    errorText,
+    isOwner,
+    displayName,
+    handle,
+    bio,
+    showSocials,
+    socials,
+    avatarUrl,
+  } = useProfileData();
 
-  const name = profile?.display_name || user?.username || 'NH Explorer';
-  const handle = user?.handle ? `@${user.handle}` : user?.username ? `@${user.username}` : '';
+  const resolvedDisplayName = displayName ?? user?.username ?? 'NH Explorer';
+  const resolvedHandle = handle ?? user?.username ?? undefined;
   const level = user?.level ?? 1;
   const exp = user?.exp ?? 0;
   const nextLv = Math.max(1000, Math.ceil((level + 1) * 1000));
   const xpIntoLevel = exp % nextLv;
+  const socialsData = socials ?? {};
 
   return (
     <ScrollView className="flex-1 bg-[#161022]">
-      {/* Header */}
-      <View className="px-4 pt-6 pb-3 flex-row items-center justify-between">
-        <View className="flex-row items-center gap-4">
-          <Avatar name={name} uri={profile?.avatar_url || user?.avatar_url || null} size={84} />
-          <View className="flex-1">
-            <Text className="text-white text-2xl font-bold">{name}</Text>
-            {!!handle && <Text className="text-white/70">{handle}</Text>}
-            {!!profile?.bio && <Text className="text-white/80 mt-1">{profile.bio}</Text>}
-          </View>
-        </View>
-        {isOwner ? (
-          <Pressable onPress={() => nav.navigate('EditProfile' as never)} className="rounded-full bg-purple-600 px-4 py-2">
-            <Text className="text-white font-semibold">Edit</Text>
-          </Pressable>
-        ) : null}
-      </View>
+      <ProfileHeader
+        displayName={resolvedDisplayName}
+        handle={resolvedHandle}
+        bio={bio}
+        level={user?.level}
+        avatarUrl={avatarUrl ?? user?.avatar_url ?? null}
+        canEdit={Boolean(isOwner)}
+        onPressEdit={isOwner ? () => nav.navigate('EditProfile' as never) : undefined}
+      />
 
       {/* Level / XP */}
       <Card>
@@ -125,33 +133,34 @@ export default function ProfileScreen() {
       </ScrollView>
 
       {/* Socials */}
-      {profile?.show_socials ? (
+      {showSocials ? (
         <>
           <SectionTitle>Socials</SectionTitle>
           <Card>
-            {profile?.social_twitch ? (
+            {socialsData.twitch ? (
               <Text className="text-white">
                 Twitch{'\n'}
-                {profile.social_twitch}
+                {socialsData.twitch}
               </Text>
             ) : null}
-            {profile?.social_x ? (
+            {socialsData.x ? (
               <Text className="text-white mt-3">
                 X{'\n'}
-                {profile.social_x}
+                {socialsData.x}
               </Text>
             ) : null}
-            {profile?.social_youtube ? (
+            {socialsData.youtube ? (
               <Text className="text-white mt-3">
                 YouTube{'\n'}
-                {profile.social_youtube}
+                {socialsData.youtube}
               </Text>
             ) : null}
           </Card>
         </>
       ) : null}
 
-      {!!errorText && (
+      {/* errorText is exposed only in dev as a troubleshooting hint */}
+      {__DEV__ && !!errorText && (
         <Text className="text-red-400 px-4 py-4">
           We couldn’t load everything.
           {'\n'}

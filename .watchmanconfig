@@ -1,7 +1,6 @@
 {
   "ignore_dirs": [
     ".git",
-    "node_modules",
     "ios/Pods",
     "android/build",
     "android/app/build"

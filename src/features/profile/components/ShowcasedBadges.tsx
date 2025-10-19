@@ -1,5 +1,5 @@
 import React from 'react';
-import { Image, ScrollView, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 import type { ProfileBadge } from '../hooks/useProfileData';
 
 type ShowcasedBadgesProps = {
@@ -13,27 +13,16 @@ export function ShowcasedBadges({ badges }: ShowcasedBadgesProps) {
     <View className="border border-white/10 bg-white/5 p-4 rounded-xl" testID="ShowcasedBadgesSection">
       <Text className="text-base font-semibold text-white mb-3">Showcased Badges</Text>
       {hasBadges ? (
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={{ gap: 12 }}
-        >
+        <View className="flex-row flex-wrap gap-2">
           {badges.map((badge) => (
-            <View
+            <Text
               key={badge.id}
-              className="flex-row items-center gap-2 rounded-full border border-white/10 bg-black/40 px-4 py-2"
+              className="px-3 py-1 rounded-full bg-white/10 text-white text-xs font-semibold"
             >
-              {badge.icon ? (
-                <Image source={{ uri: badge.icon }} className="h-6 w-6 rounded-full bg-white/10" />
-              ) : (
-                <View className="h-6 w-6 items-center justify-center rounded-full bg-white/10">
-                  <Text className="text-xs font-semibold text-white/80">★</Text>
-                </View>
-              )}
-              <Text className="text-sm font-medium text-white/90">{badge.name}</Text>
-            </View>
+              {badge.name}
+            </Text>
           ))}
-        </ScrollView>
+        </View>
       ) : (
         <Text className="text-sm text-white/60">No showcased badges yet.</Text>
       )}
@@ -42,4 +31,3 @@ export function ShowcasedBadges({ badges }: ShowcasedBadgesProps) {
 }
 
 export default ShowcasedBadges;
-
