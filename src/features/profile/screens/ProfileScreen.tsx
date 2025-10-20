@@ -1,14 +1,12 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { ScrollView, View, Text, RefreshControl, StyleSheet } from "react-native";
 import useProfileData from "../hooks/useProfileData";
 import Section from "../../../ui/components/Section";
 import ProgressBar from "../../../ui/components/ProgressBar";
-import PosterImage from "../../../ui/components/PosterImage";
 import HeroBanner from "../components/HeroBanner";
 import GridNine from "../components/GridNine";
-import ProfileAvatar from "../components/ProfileAvatar";
-import Icon from "react-native-vector-icons/MaterialCommunityIcons";
+import ProfileHeader from "../components/ProfileHeader";
 
 const C = {
   bg: "#0F0D1A",
@@ -20,6 +18,12 @@ const C = {
 
 export default function ProfileScreen() {
   const { data, isLoading, refetch, error } = useProfileData();
+  const [showOverlay, setShowOverlay] = useState(true);
+
+  useEffect(() => {
+    const timeout = setTimeout(() => setShowOverlay(false), 4000);
+    return () => clearTimeout(timeout);
+  }, []);
 
   const onRefresh = React.useCallback(() => { refetch(); }, [refetch]);
 
@@ -30,10 +34,20 @@ export default function ProfileScreen() {
     </View>
   );
 
+  const featuredThumbnail = data?.banner?.thumbnail_url ?? data?.eleven?.thumbnail_url ?? null;
+
+  const hasLoggedUiMount = React.useRef(false);
+
+  useEffect(() => {
+    if (!hasLoggedUiMount.current) {
+      console.log("[profile] ui mounted: gridNine len", data?.gridNine?.length ?? 0);
+      hasLoggedUiMount.current = true;
+    }
+  }, [data?.gridNine?.length]);
+
   return (
     <SafeAreaView edges={["top"]} style={styles.root}>
       <ScrollView
-        stickyHeaderIndices={[1]}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
@@ -41,33 +55,14 @@ export default function ProfileScreen() {
           <RefreshControl tintColor={C.text} refreshing={isLoading} onRefresh={onRefresh} />
         }
       >
-        <HeroBanner
-          title={data?.banner?.title ?? data?.eleven?.title}
-          imageUri={data?.banner?.thumbnail_url ?? data?.eleven?.thumbnail_url ?? null}
+        <ProfileHeader
+          displayName={data?.profile?.handle ?? "NH Explorer"}
+          handle={data?.profile?.handle ?? null}
+          level={null}
+          bio={data?.profile?.bio ?? null}
+          showSocials={data?.profile?.showSocials}
+          socials={data?.profile?.socials}
         />
-        {/* Header */}
-        <View style={styles.headerSticky}>
-          <View style={styles.headerRow}>
-            <ProfileAvatar
-              userId={data?.profile?.user_id}
-              demoUserId={data?.demoUserId}
-              remoteUri={data?.profile?.avatar_url ?? null}
-              size={84}
-            />
-            <View style={{ flex: 1 }}>
-              <Text style={styles.title} numberOfLines={1}>
-                {data?.profile?.handle ?? "NH Explorer"}
-              </Text>
-              {!!data?.profile?.handle && (
-                <Text style={styles.handle}>@{data.profile.handle}</Text>
-              )}
-              {!!data?.profile?.bio && (
-                <Text style={styles.body} numberOfLines={2}>{data.profile.bio}</Text>
-              )}
-            </View>
-            <Text style={styles.edit}>Edit</Text>
-          </View>
-        </View>
 
         {/* Progress */}
         <Section style={styles.section}>
@@ -102,36 +97,18 @@ export default function ProfileScreen() {
           </View>
         </Section>
 
-        {/* 11/10 */}
-        <Section style={styles.section}>
-          <Text style={styles.h2}>Your 11/10</Text>
-          {data?.eleven ? (
-            <View style={styles.elevenRow}>
-              <PosterImage uri={data.eleven.thumbnail_url ?? null} width={140} />
-            </View>
-          ) : (
-            <Text style={styles.caption}>
-              Set an 11/10 from any anime page via "Set as 11/10".
-            </Text>
-          )}
-        </Section>
+        {/* --- 11/10 section REPLACED by Hero --- */}
+        {(data?.banner || data?.eleven) ? (
+          <HeroBanner
+            title={(data?.banner?.title ?? data?.eleven?.title) || ''}
+            thumbnailUrl={featuredThumbnail}
+            subtitle={data?.profile?.handle ? `@${data.profile.handle}` : undefined}
+          />
+        ) : null}
+        {/* --- end replacement --- */}
 
         {/* Top List */}
-        <GridNine items={data?.gridNine ?? []} elevenId={data?.eleven?.id ?? null} />
-
-        {/* Socials */}
-        <Section style={styles.bottomSpace}>
-          <Text style={styles.h2}>Socials</Text>
-          {data?.profile?.showSocials ? (
-            <View style={styles.socialIcons}>
-              {!!data?.profile?.socials?.youtube && <Icon name="youtube" size={22} color="#fff" />}
-              {!!data?.profile?.socials?.twitch && <Icon name="twitch" size={22} color="#fff" />}
-              {!!data?.profile?.socials?.x && <Icon name="twitter" size={22} color="#fff" />}
-            </View>
-          ) : (
-            <Text style={styles.body}>No socials added yet.</Text>
-          )}
-        </Section>
+        <GridNine data={data?.gridNine ?? []} elevenId={data?.eleven?.id ?? undefined} />
 
         {!!error && __DEV__ && (
           <View style={styles.errBox}>
@@ -139,33 +116,53 @@ export default function ProfileScreen() {
           </View>
         )}
       </ScrollView>
+
+      {showOverlay ? (
+        <View style={styles.overlay} pointerEvents="none">
+          <Text style={styles.overlayLabel}>[profile] debug avatar overlay</Text>
+          <ProfileHeader displayName="Debug Avatar" handle="overlay" level={null} bio={null} />
+        </View>
+      ) : null}
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: C.bg },
-  scrollContent: { flexGrow: 1, paddingTop: 16, paddingBottom: 32, paddingHorizontal: 16 },
-  headerSticky: { backgroundColor: C.bg, paddingTop: 8, paddingBottom: 12 },
-  headerRow: { flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 12 },
-  title: { color: C.text, fontSize: 20, fontWeight: "700" },
-  handle: { color: C.sub2, marginTop: 2 },
-  body: { color: C.sub, fontSize: 14 },
-  h2: { color: C.text, fontSize: 16, fontWeight: "700" },
-  caption: { color: C.sub2, fontSize: 12, marginTop: 6 },
-  edit: { color: C.accent, fontWeight: "600" },
-  section: { marginBottom: 24 },
-  statsRow: { flexDirection: "row", justifyContent: "space-between", marginTop: 12 },
+  root: {
+    flex: 1,
+    backgroundColor: C.bg,
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 32,
+  },
+  scrollContent: { flexGrow: 1 },
+  h2: { color: C.text, fontSize: 18, fontWeight: "700", marginTop: 16, marginBottom: 8 },
+  caption: { color: "#C8C6D8", fontSize: 12, marginTop: 6 },
+  section: { marginTop: 16, marginBottom: 16 },
+  statsRow: { flexDirection: "row", justifyContent: "space-between", marginTop: 12, gap: 16 },
   statItem: { alignItems: "center", minWidth: 90 },
   statValue: { color: C.text, fontSize: 20, fontWeight: "700" },
   statLabel: { color: C.sub2, fontSize: 12, marginTop: 4, textAlign: "center" },
   badgesRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 12 },
   badge: { color: "#C7D2FE", fontSize: 12, backgroundColor: "rgba(99,102,241,0.15)", paddingHorizontal: 12, paddingVertical: 6, borderRadius: 999 },
-  elevenRow: { flexDirection: "row", alignItems: "center", marginTop: 12 },
-  itemTitle: { color: C.text, fontWeight: "600", fontSize: 16 },
-  link: { color: C.accent, fontWeight: "600", marginTop: 8 },
-  bottomSpace: { marginBottom: 64 },
-  socialIcons: { flexDirection: "row", alignItems: "center", gap: 16, paddingHorizontal: 16, marginTop: 8 },
   errBox: { backgroundColor: "rgba(239,68,68,0.15)", borderColor: "#7F1D1D", borderWidth: 1, borderRadius: 12, padding: 8, marginTop: 16 },
-  errText: { color: "#fecaca", fontSize: 12 }
+  errText: { color: "#fecaca", fontSize: 12 },
+  overlay: {
+    position: "absolute",
+    top: 96,
+    left: 12,
+    right: 12,
+    padding: 12,
+    backgroundColor: "rgba(255,0,255,0.08)",
+    zIndex: 9999,
+    borderWidth: 1,
+    borderColor: "#FF00FF",
+    borderRadius: 12,
+    gap: 8,
+  },
+  overlayLabel: {
+    color: "#FF00FF",
+    fontWeight: "700",
+    textAlign: "center",
+  },
 });

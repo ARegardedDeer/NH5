@@ -1,46 +1,114 @@
 import React from 'react';
-import { Pressable, Text, View } from 'react-native';
-import Avatar from '../../../ui/components/Avatar';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
+import ProfileAvatar from './ProfileAvatar';
+import SocialRow from './SocialRow';
 
 type ProfileHeaderProps = {
-  displayName: string;
-  level?: number | null;
+  displayName?: string | null;
   handle?: string | null;
+  level?: number | null;
   bio?: string | null;
-  avatarUrl?: string | null;
   canEdit?: boolean;
   onPressEdit?: () => void;
+  showSocials?: boolean;
+  socials?: { youtube?: string | null; twitch?: string | null; x?: string | null };
 };
 
-export function ProfileHeader({
+export default function ProfileHeader({
   displayName,
-  level,
   handle,
+  level,
   bio,
-  avatarUrl,
   canEdit,
   onPressEdit,
+  showSocials,
+  socials,
 }: ProfileHeaderProps) {
-  const showLevel = typeof level === 'number' && Number.isFinite(level);
+  const name = displayName || 'Anonymous Otaku';
+  const handleText = handle ? `@${handle}` : null;
+  const levelText = Number.isFinite(level) ? `Lv ${level}` : null;
 
   return (
-    <View className="px-4 pt-6 pb-3 flex-row items-center justify-between" testID="ProfileHeader">
-      <View className="flex-row items-center gap-4">
-        <Avatar name={displayName} uri={avatarUrl || null} size={84} />
-        <View className="flex-1">
-          <Text className="text-white text-2xl font-bold">{displayName}</Text>
-          {!!handle && <Text className="text-white/70">@{handle}</Text>}
-          {showLevel ? <Text className="text-white/60 mt-1">Level {level}</Text> : null}
-          {!!bio && <Text className="text-white/80 mt-1">{bio}</Text>}
-        </View>
+    <View
+      style={styles.container}
+      onLayout={(event) => {
+        if (__DEV__) {
+          const { x, y, width, height } = event.nativeEvent.layout;
+          console.log('[profile] header onLayout', { x, y, width, height });
+        }
+      }}
+    >
+      <ProfileAvatar size={96} />
+      <View style={styles.textBlock}>
+        <Text style={styles.displayName} numberOfLines={1}>
+          {name}
+        </Text>
+        {handleText ? (
+          <Text style={styles.handle} numberOfLines={1}>
+            {handleText}
+          </Text>
+        ) : null}
+        {levelText ? <Text style={styles.level}>{levelText}</Text> : null}
+        {bio ? (
+          <Text style={styles.bio} numberOfLines={2}>
+            {bio}
+          </Text>
+        ) : null}
+        <SocialRow show={showSocials} socials={socials} />
       </View>
       {canEdit ? (
-        <Pressable onPress={onPressEdit} className="rounded-full bg-purple-600 px-4 py-2">
-          <Text className="text-white font-semibold">Edit</Text>
+        <Pressable style={styles.editButton} onPress={onPressEdit}>
+          <Text style={styles.editText}>Edit</Text>
         </Pressable>
       ) : null}
     </View>
   );
 }
 
-export default ProfileHeader;
+const styles = StyleSheet.create({
+  container: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    minHeight: 112,
+    zIndex: 10,
+    gap: 16,
+    paddingTop: 8,
+    paddingBottom: 16,
+    marginBottom: 16,
+  },
+  textBlock: {
+    flex: 1,
+    minWidth: 0,
+    gap: 6,
+  },
+  displayName: {
+    color: '#FFFFFF',
+    fontSize: 22,
+    fontWeight: '700',
+  },
+  handle: {
+    color: '#C8C6D8',
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  level: {
+    color: '#C8C6D8',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  bio: {
+    color: '#C8C6D8',
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  editButton: {
+    backgroundColor: '#7C3AED',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 20,
+  },
+  editText: {
+    color: '#FFFFFF',
+    fontWeight: '600',
+  },
+});
