@@ -6,3 +6,6 @@ yarn-error.log
 expo-env.d.ts
 dist/
 build/
+
+# Xcode UI state (ignore)
+*.xcuserstate
