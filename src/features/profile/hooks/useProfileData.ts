@@ -17,6 +17,7 @@ type ProfileBasics = {
   handle: string | null;
   bio: string | null;
   socials: SocialLinks;
+  showSocials: boolean;
 };
 
 export type ProfileBadge = {
@@ -36,10 +37,17 @@ export type TopListEntry = {
   note?: string | null;
 };
 
+export type ElevenAnime = {
+  id: string;
+  title: string;
+  thumbnail_url: string | null;
+} | null;
+
 export type HookResult = {
   profile: ProfileBasics;
   badges: ProfileBadge[];
   topList: TopListEntry[];
+  eleven: ElevenAnime;
   error?: string;
 };
 
@@ -49,6 +57,7 @@ const createEmptyProfile = (): ProfileBasics => ({
   handle: null,
   bio: null,
   socials: { ...EMPTY_SOCIALS },
+  showSocials: false,
 });
 
 async function getCachedUserId(): Promise<string | null> {
@@ -92,7 +101,7 @@ async function fetchProfileBasics(userId: string): Promise<{ profile: ProfileBas
   try {
     const { data, error } = await supabase
       .from('user_profiles')
-      .select('handle,bio,twitch,x,youtube')
+      .select('handle,bio,twitch,x,youtube,show_socials')
       .eq('user_id', userId)
       .maybeSingle();
 
@@ -104,16 +113,28 @@ async function fetchProfileBasics(userId: string): Promise<{ profile: ProfileBas
       };
     }
 
-    const socials: SocialLinks = {
-      youtube: data?.youtube ?? null,
-      twitch: data?.twitch ?? null,
-      x: data?.x ?? null,
-    };
+    const showSocials = Boolean(data?.show_socials);
+
+    let socials: SocialLinks = { ...EMPTY_SOCIALS };
+    if (showSocials) {
+      socials = {
+        youtube: data?.youtube ?? null,
+        twitch: data?.twitch ?? null,
+        x: data?.x ?? null,
+      };
+
+      if (Object.values(socials).some((value) => Boolean(value))) {
+        console.log('[profile] fetchSocials ok', socials);
+      }
+    } else {
+      console.log('[profile] fetchSocials skipped');
+    }
 
     const profile: ProfileBasics = {
       handle: data?.handle ?? null,
       bio: data?.bio ?? null,
       socials,
+      showSocials,
     };
 
     console.log('[profile] fetchProfileBasics ok', profile);
@@ -214,6 +235,38 @@ async function fetchTopList(userId: string): Promise<{ topList: TopListEntry[]; 
   }
 }
 
+async function fetchEleven(userId: string): Promise<ElevenAnime> {
+  try {
+    // Step 1: get anime_id
+    const { data: row, error: rowErr } = await supabase
+      .from('user_eleven')
+      .select('anime_id')
+      .eq('user_id', userId)
+      .maybeSingle();
+
+    if (rowErr) throw rowErr;
+    if (!row?.anime_id) {
+      console.log('[profile] fetchEleven ok', null);
+      return null;
+    }
+
+    // Step 2: get anime data
+    const { data: anime, error: animeErr } = await supabase
+      .from('anime')
+      .select('id, title, thumbnail_url')
+      .eq('id', row.anime_id)
+      .maybeSingle();
+
+    if (animeErr) throw animeErr;
+
+    console.log('[profile] fetchEleven ok', anime);
+    return anime ?? null;
+  } catch (err) {
+    console.warn('[profile] fetchEleven error', err);
+    return null;
+  }
+}
+
 async function loadProfileData(): Promise<HookResult> {
   const errors: string[] = [];
 
@@ -230,16 +283,21 @@ async function loadProfileData(): Promise<HookResult> {
   if (badgesErr) errors.push(`badges: ${badgesErr}`);
   if (topListErr) errors.push(`topList: ${topListErr}`);
 
+  const eleven = await fetchEleven(userId);
+
   const error = errors.length ? errors.join(' | ') : undefined;
 
-  console.log('[profile] profile:', profile);
-  console.log('[profile] badges:', badges.length);
-  console.log('[profile] topList:', topList.length);
+  console.log('[profile] userId:', userId);
+  console.log('[profile] topList(count):', topList?.length ?? 0);
+  console.log('[profile] fetchProfileBasics ok', profile);
+  console.log('[profile] fetchBadges ok', badges);
+  console.log('[profile] eleven:', eleven);
 
   return {
     profile,
     badges,
     topList,
+    eleven,
     error,
   };
 }

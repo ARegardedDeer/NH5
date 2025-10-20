@@ -1,11 +1,13 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Alert, Image, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Button, Image, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRoute } from '@react-navigation/native';
 import { useAnimeById } from '../hooks/useAnimeById';
 import { useMyRating } from '../hooks/useMyRating';
 import { theme } from '../../../ui/theme';
 import { RatingPicker } from '../components/RatingPicker';
+import { supabase } from '../../../db/supabaseClient';
+import { getCurrentUserId } from '../../../state/currentUser';
 
 type RouteParams = { id: string; title: string };
 
@@ -67,6 +69,25 @@ export default function AnimeDetailScreen() {
     }
   };
 
+  const onSetEleven = async () => {
+    try {
+      const userId = await getCurrentUserId();
+      if (!userId) {
+        Alert.alert('Error', 'Could not determine user ID');
+        return;
+      }
+      const { error } = await supabase
+        .from('user_eleven')
+        .upsert({ user_id: userId, anime_id: id }, { onConflict: 'user_id' });
+      if (error) throw error;
+      console.log('[profile] setEleven ok', { userId, animeId: id });
+      Alert.alert('Saved', 'This is now your 11/10 highlight!');
+    } catch (e: any) {
+      console.warn('[profile] setEleven error', e);
+      Alert.alert('Error', 'Could not set 11/10.');
+    }
+  };
+
   if (isLoading) {
     return (
       <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
@@ -92,7 +113,10 @@ export default function AnimeDetailScreen() {
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
       <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
-        <Text style={styles.title}>{title}</Text>
+        <View style={styles.titleRow}>
+          <Text style={styles.title}>{title}</Text>
+          <Button title="Set as 11/10" onPress={onSetEleven} />
+        </View>
 
         {data?.thumbnail_url ? (
           <Image source={{ uri: data.thumbnail_url }} style={styles.poster} resizeMode="cover" />
@@ -134,7 +158,8 @@ const styles = StyleSheet.create({
   scroll: { flex: 1 },
   content: { padding: 16, paddingBottom: 40 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24, gap: 12 },
-  title: { color: '#fff', fontSize: 24, fontWeight: '700', marginBottom: 12 },
+  titleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
+  title: { color: '#fff', fontSize: 24, fontWeight: '700', flex: 1 },
   loadingText: { color: 'rgba(255,255,255,0.8)', fontSize: 14 },
   errorText: { color: 'rgba(255,255,255,0.7)', textAlign: 'center' },
   poster: { width: '100%', height: 200, borderRadius: 12, marginBottom: 12 },

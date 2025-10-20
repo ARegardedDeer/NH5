@@ -31,6 +31,8 @@ export default function ProfileScreen() {
     <SafeAreaView edges={["top"]} style={{ flex: 1, backgroundColor: C.bg }}>
       <ScrollView
         contentContainerStyle={styles.container}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
         refreshControl={
           <RefreshControl tintColor={C.text} refreshing={isLoading} onRefresh={onRefresh} />
         }
@@ -40,13 +42,13 @@ export default function ProfileScreen() {
           <Avatar size={72} />
           <View style={{ flex: 1 }}>
             <Text style={styles.title} numberOfLines={1}>
-              {data?.displayName ?? "NH Explorer"}
+              {data?.profile?.handle ?? "NH Explorer"}
             </Text>
-            {!!data?.handle && (
-              <Text style={styles.handle}>@{data.handle}</Text>
+            {!!data?.profile?.handle && (
+              <Text style={styles.handle}>@{data.profile.handle}</Text>
             )}
-            {!!data?.bio && (
-              <Text style={styles.body} numberOfLines={2}>{data.bio}</Text>
+            {!!data?.profile?.bio && (
+              <Text style={styles.body} numberOfLines={2}>{data.profile.bio}</Text>
             )}
           </View>
           <Text style={styles.edit}>Edit</Text>
@@ -87,25 +89,16 @@ export default function ProfileScreen() {
 
         {/* 11/10 */}
         <Section style={styles.section}>
-          <Text style={styles.h2}>My 11/10 Anime</Text>
-          <View style={styles.elevenRow}>
-            {data?.eleven ? (
-              <>
-                <PosterImage uri={data.eleven?.thumbnail_url ?? null} width={96} />
-                <View style={{ flex: 1, marginLeft: 16 }}>
-                  <Text style={styles.itemTitle} numberOfLines={1}>{data.eleven.title}</Text>
-                  {!!data.eleven.tags?.length && (
-                    <Text style={styles.caption} numberOfLines={1}>
-                      {data.eleven.tags.join(",")}
-                    </Text>
-                  )}
-                </View>
-              </>
-            ) : (
-              <Text style={styles.body}>Pick your all-time #1 later.</Text>
-            )}
-          </View>
-          <Text style={styles.link}>Change</Text>
+          <Text style={styles.h2}>Your 11/10</Text>
+          {data?.eleven ? (
+            <View style={styles.elevenRow}>
+              <PosterImage uri={data.eleven.thumbnail_url ?? null} width={140} />
+            </View>
+          ) : (
+            <Text style={styles.caption}>
+              Set an 11/10 from any anime page via "Set as 11/10".
+            </Text>
+          )}
         </Section>
 
         {/* Top List */}
@@ -124,11 +117,11 @@ export default function ProfileScreen() {
         {/* Socials */}
         <Section style={styles.bottomSpace}>
           <Text style={styles.h2}>Socials</Text>
-          {data?.showSocials && data?.socials ? (
+          {data?.profile?.showSocials && data?.profile?.socials ? (
             <View style={{ marginTop: 8 }}>
-              {data.socials.twitch   && <Text style={styles.body}>Twitch  ·  {data.socials.twitch}</Text>}
-              {data.socials.x        && <Text style={styles.body}>X       ·  {data.socials.x}</Text>}
-              {data.socials.youtube  && <Text style={styles.body}>YouTube ·  {data.socials.youtube}</Text>}
+              {data.profile.socials.twitch   && <Text style={styles.body}>Twitch  ·  {data.profile.socials.twitch}</Text>}
+              {data.profile.socials.x        && <Text style={styles.body}>X       ·  {data.profile.socials.x}</Text>}
+              {data.profile.socials.youtube  && <Text style={styles.body}>YouTube ·  {data.profile.socials.youtube}</Text>}
             </View>
           ) : (
             <Text style={styles.body}>No socials added yet.</Text>
@@ -146,8 +139,8 @@ export default function ProfileScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { paddingHorizontal: 16, paddingBottom: 48 },
-  headerRow: { flexDirection: "row", alignItems: "center", gap: 12, marginTop: 8, marginBottom: 24 },
+  container: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 32, flexGrow: 1 },
+  headerRow: { flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 24 },
   title: { color: C.text, fontSize: 20, fontWeight: "700" },
   handle: { color: C.sub2, marginTop: 2 },
   body: { color: C.sub, fontSize: 14 },
