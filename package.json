@@ -15,7 +15,8 @@
     "dev:reset": "bash ./tools/dev/reset.sh",
     "dev:ios": "react-native run-ios --simulator \"iPhone 15\"",
     "dev:android": "react-native run-android --terminal=Terminal",
-    "dev:kill": "lsof -ti :8081 | xargs kill -9 2>/dev/null || true"
+    "dev:kill": "lsof -ti :8081 | xargs kill -9 2>/dev/null || true",
+    "diag:eleven": "node scripts/diag-eleven.mjs"
   },
   "repository": {
     "type": "git",
@@ -43,7 +44,7 @@
     "react-native-svg": "^15.14.0",
     "react-native-svg-transformer": "^1.5.1",
     "react-native-url-polyfill": "3.0.0",
-    "react-native-vector-icons": "^10",
+    "react-native-vector-icons": "^10.3.0",
     "typescript": "^5.9.3"
   },
   "devDependencies": {

@@ -2,10 +2,13 @@ import React from "react";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { ScrollView, View, Text, RefreshControl, StyleSheet } from "react-native";
 import useProfileData from "../hooks/useProfileData";
-import Avatar from "../../../ui/components/Avatar";
 import Section from "../../../ui/components/Section";
 import ProgressBar from "../../../ui/components/ProgressBar";
 import PosterImage from "../../../ui/components/PosterImage";
+import HeroBanner from "../components/HeroBanner";
+import GridNine from "../components/GridNine";
+import ProfileAvatar from "../components/ProfileAvatar";
+import Icon from "react-native-vector-icons/MaterialCommunityIcons";
 
 const C = {
   bg: "#0F0D1A",
@@ -30,7 +33,7 @@ export default function ProfileScreen() {
   return (
     <SafeAreaView edges={["top"]} style={styles.root}>
       <ScrollView
-        stickyHeaderIndices={[0]}
+        stickyHeaderIndices={[1]}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
@@ -38,10 +41,19 @@ export default function ProfileScreen() {
           <RefreshControl tintColor={C.text} refreshing={isLoading} onRefresh={onRefresh} />
         }
       >
+        <HeroBanner
+          title={data?.banner?.title ?? data?.eleven?.title}
+          imageUri={data?.banner?.thumbnail_url ?? data?.eleven?.thumbnail_url ?? null}
+        />
         {/* Header */}
         <View style={styles.headerSticky}>
           <View style={styles.headerRow}>
-            <Avatar size={72} />
+            <ProfileAvatar
+              userId={data?.profile?.user_id}
+              demoUserId={data?.demoUserId}
+              remoteUri={data?.profile?.avatar_url ?? null}
+              size={84}
+            />
             <View style={{ flex: 1 }}>
               <Text style={styles.title} numberOfLines={1}>
                 {data?.profile?.handle ?? "NH Explorer"}
@@ -105,26 +117,16 @@ export default function ProfileScreen() {
         </Section>
 
         {/* Top List */}
-        <Section style={styles.section}>
-          <Text style={styles.h2}>My Top List</Text>
-          <View style={styles.topRow}>
-            {(data?.topList ?? []).slice(0, 10).map((a: any, i: number) => (
-              <PosterImage key={i} uri={a?.thumbnail_url ?? null} width={112} />
-            ))}
-            {(!data?.topList || data.topList.length === 0) && (
-              <Text style={styles.body}>Add your Top List later.</Text>
-            )}
-          </View>
-        </Section>
+        <GridNine items={data?.gridNine ?? []} elevenId={data?.eleven?.id ?? null} />
 
         {/* Socials */}
         <Section style={styles.bottomSpace}>
           <Text style={styles.h2}>Socials</Text>
-          {data?.profile?.showSocials && data?.profile?.socials ? (
-            <View style={{ marginTop: 8 }}>
-              {data.profile.socials.twitch   && <Text style={styles.body}>Twitch  ·  {data.profile.socials.twitch}</Text>}
-              {data.profile.socials.x        && <Text style={styles.body}>X       ·  {data.profile.socials.x}</Text>}
-              {data.profile.socials.youtube  && <Text style={styles.body}>YouTube ·  {data.profile.socials.youtube}</Text>}
+          {data?.profile?.showSocials ? (
+            <View style={styles.socialIcons}>
+              {!!data?.profile?.socials?.youtube && <Icon name="youtube" size={22} color="#fff" />}
+              {!!data?.profile?.socials?.twitch && <Icon name="twitch" size={22} color="#fff" />}
+              {!!data?.profile?.socials?.x && <Icon name="twitter" size={22} color="#fff" />}
             </View>
           ) : (
             <Text style={styles.body}>No socials added yet.</Text>
@@ -162,8 +164,8 @@ const styles = StyleSheet.create({
   elevenRow: { flexDirection: "row", alignItems: "center", marginTop: 12 },
   itemTitle: { color: C.text, fontWeight: "600", fontSize: 16 },
   link: { color: C.accent, fontWeight: "600", marginTop: 8 },
-  topRow: { flexDirection: "row", gap: 12, marginTop: 12, flexWrap: "wrap" },
   bottomSpace: { marginBottom: 64 },
+  socialIcons: { flexDirection: "row", alignItems: "center", gap: 16, paddingHorizontal: 16, marginTop: 8 },
   errBox: { backgroundColor: "rgba(239,68,68,0.15)", borderColor: "#7F1D1D", borderWidth: 1, borderRadius: 12, padding: 8, marginTop: 16 },
   errText: { color: "#fecaca", fontSize: 12 }
 });

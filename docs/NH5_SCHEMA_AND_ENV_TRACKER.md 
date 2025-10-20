@@ -1,0 +1,170 @@
+# 🧩 NH5 Schema & Environment Tracker  
+_Last updated: 2025-10-20_
+
+This document tracks the **current Supabase schema**, **frontend integration details**, and **environment versions** for the Nimehime NH5 project.  
+It exists to prevent schema mismatches, version drift, and repeated Babel/NativeWind build loops.
+
+---
+
+## ⚙️ Environment Overview
+
+| Component | Version / Config |
+|------------|------------------|
+| Node | 20.19.4 |
+| npm | 10.8.2 |
+| React Native | 0.82 |
+| Babel | preset-only (`module:@react-native/babel-preset`) |
+| Package Manager | **npm only** (Yarn banned; enforced via `only-allow`) |
+| Watchman | Active; node_modules **not** ignored |
+| Metro | Runs on port 8081 (`npx react-native start --reset-cache`) |
+| Supabase Host | `lnlkxrqrnkgjbbpjmszu.supabase.co` |
+| Auth | `public.users` via email / Google OAuth |
+| Environment File | `.env` with `SUPABASE_URL` + `SUPABASE_ANON_KEY` |
+| Styling | React Native `StyleSheet` (no NativeWind plugin) |
+| Theme | Dark mode (`bg-[#0F0D1A]`) with white text |
+| Platform Target | iOS first (Bundle ID: `com.nimehime.nh5`) |
+
+---
+
+## 🗃️ Supabase Tables (as of live schema dump)
+
+### `public.users`
+| column_name | data_type |
+|--------------|-----------|
+| id | uuid |
+| email | text |
+| created_at | timestamp with time zone |
+| updated_at | timestamp with time zone |
+
+---
+
+### `public.user_profiles`
+| column_name | data_type |
+|--------------|-----------|
+| user_id | uuid |
+| bio | text |
+| show_level | boolean |
+| show_socials | boolean |
+| top_list_limit | integer |
+| updated_at | timestamp with time zone |
+| handle | text |
+| twitch | text |
+| x | text |
+| youtube | text |
+
+---
+
+### `public.user_badges`
+| column_name | data_type |
+|--------------|-----------|
+| user_id | uuid |
+| badge_id | uuid |
+| unlocked_at | timestamp with time zone |
+| is_showcased | boolean |
+
+---
+
+### `public.user_top_list`
+| column_name | data_type |
+|--------------|-----------|
+| user_id | uuid |
+| position | integer |
+| anime_id | uuid |
+| created_at | timestamp with time zone |
+| updated_at | timestamp with time zone |
+
+---
+
+### `public.anime`
+| column_name | data_type |
+|--------------|-----------|
+| id | uuid |
+| title | text |
+| tags | array |
+| synopsis | text |
+| air_date | date |
+| voice_actors | array |
+| episodes_count | integer |
+| thumbnail_url | text |
+| created_at | timestamp with time zone |
+
+✅ **Important:** NH5 uses `thumbnail_url` — not `poster_url`, `image_url`, or `cover_image`.
+
+---
+
+## 🔌 Data Flow (App → Supabase → Profile Screen)
+
+1. **Supabase Client:**  
+   `src/db/supabaseClient.ts` connects using `@supabase/supabase-js` and `.env` keys.
+
+2. **Profile Hook:**  
+   `src/features/profile/hooks/useProfileData.ts`  
+   - Reads `public.users` → `user_profiles` (for bio, socials).  
+   - Reads `user_badges` (for unlocked badges).  
+   - Reads `user_top_list` → `anime.thumbnail_url` (for Top List).  
+   - Returns `profile`, `badges`, `topList`, and `stats` objects.  
+   - Fully schema-agnostic and logs errors in `[profile]` namespace.  
+
+3. **UI Components:**  
+   - `ProfileScreen.tsx`: renders handle, badges, socials, and 11/10 highlight.  
+   - `PosterImage`: now fed via `thumbnail_url` (null-safe).  
+   - `TopList`: maps Supabase Top List → thumbnails grid.  
+   - `EditProfileScreen` & `ElevenPickerScreen`: modal flows for editing.  
+
+---
+
+## 🧠 Known Issues / Fix Log
+
+| Issue | Fix |
+|--------|-----|
+| `poster_url` missing → blank images | ✅ replaced with `thumbnail_url` |
+| AsyncStorage demo id drift | ✅ fixed via `ensureDemoUserCached()` |
+| Supabase seed failed on constraints | ✅ split into smaller transactional chunks |
+| Babel `.plugins` error | ✅ reverted to preset-only config |
+| Duplicate `Metro` processes | ✅ added `pkill -f "react-native start"` to cleanup |
+| “relation not found” SQL errors | ✅ unified schema + dropped legacy joins |
+| Empty Profile UI | ✅ verified Supabase data + UI mapping fixed |
+
+---
+
+## 🪄 Future Proof Notes
+
+| Area | Recommendation |
+|-------|----------------|
+| 🔐 **Security** | Rotate `anon` keys regularly. Restrict public RLS where possible. |
+| 🧱 **Database** | Add primary keys to `user_top_list` and `user_badges` to simplify `ON CONFLICT`. |
+| 🧮 **Caching** | Consider Supabase Realtime or React Query for live updates. |
+| 🎨 **Theming** | Migrate dark theme colors to a global theme provider. |
+| 🧰 **Automation** | Add Codex CI check that fails PRs if `yarn.lock` is reintroduced. |
+| 🧪 **Testing** | Create integration test for seeded demo user profile & top list. |
+| 📈 **Analytics** | Add basic event tracking for XP/ratings (future phase). |
+
+---
+
+## 🧾 Supabase SQL Seed
+
+```sql
+create table if not exists public.user_eleven (
+  user_id uuid references public.users(id),
+  anime_id uuid references public.anime(id),
+  created_at timestamp with time zone default now(),
+  constraint user_eleven_pkey primary key (user_id)
+);
+```
+
+---
+
+## 💡 Dev Workflow Commands
+
+```bash
+# clear caches
+pkill -f "react-native start" || true
+watchman watch-del '/Users/a_regarded_deer/NH5' ; watchman watch-project '/Users/a_regarded_deer/NH5'
+npm run dev:reset   # clears Metro + Watchman + node caches
+
+# rebuild app
+npx react-native start --reset-cache --no-interactive > /tmp/metro.log 2>&1 &
+npx react-native run-ios
+
+# stop background server
+pkill -f "react-native start"

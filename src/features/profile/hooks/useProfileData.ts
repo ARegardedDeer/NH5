@@ -18,6 +18,8 @@ type ProfileBasics = {
   bio: string | null;
   socials: SocialLinks;
   showSocials: boolean;
+  user_id: string | null;
+  avatar_url: string | null;
 };
 
 export type ProfileBadge = {
@@ -31,6 +33,7 @@ export type ProfileBadge = {
 export type TopListEntry = {
   position: number;
   id: string;
+  anime_id: string;
   title: string;
   thumbnailUrl: string | null;
   thumbnail_url: string | null;
@@ -43,11 +46,20 @@ export type ElevenAnime = {
   thumbnail_url: string | null;
 } | null;
 
+export type GridNineItem = {
+  id: string;
+  title: string;
+  thumbnail_url: string | null;
+};
+
 export type HookResult = {
   profile: ProfileBasics;
   badges: ProfileBadge[];
   topList: TopListEntry[];
   eleven: ElevenAnime;
+  banner: ElevenAnime;
+  gridNine: GridNineItem[];
+  demoUserId: string;
   error?: string;
 };
 
@@ -58,6 +70,8 @@ const createEmptyProfile = (): ProfileBasics => ({
   bio: null,
   socials: { ...EMPTY_SOCIALS },
   showSocials: false,
+  user_id: null,
+  avatar_url: null,
 });
 
 async function getCachedUserId(): Promise<string | null> {
@@ -135,6 +149,8 @@ async function fetchProfileBasics(userId: string): Promise<{ profile: ProfileBas
       bio: data?.bio ?? null,
       socials,
       showSocials,
+      user_id: userId ?? null,
+      avatar_url: (data as any)?.avatar_url ?? null,
     };
 
     console.log('[profile] fetchProfileBasics ok', profile);
@@ -214,6 +230,7 @@ async function fetchTopList(userId: string): Promise<{ topList: TopListEntry[]; 
         return {
           position: index + 1,
           id: animeId,
+          anime_id: animeId,
           title,
           thumbnailUrl: thumbnail,
           thumbnail_url: thumbnail,
@@ -285,6 +302,45 @@ async function loadProfileData(): Promise<HookResult> {
 
   const eleven = await fetchEleven(userId);
 
+  async function fetchBanner(userId: string) {
+    try {
+      // read banner_anime_id from user_profiles
+      const { data: prof, error: pe } = await supabase
+        .from('user_profiles')
+        .select('banner_anime_id')
+        .eq('user_id', userId)
+        .maybeSingle();
+      if (pe) throw pe;
+
+      const bannerId = prof?.banner_anime_id;
+      // default to eleven if no explicit banner
+      const chosenId = bannerId || eleven?.id || null;
+      if (!chosenId) return null;
+
+      const { data: a, error: ae } = await supabase
+        .from('anime')
+        .select('id,title,thumbnail_url')
+        .eq('id', chosenId)
+        .maybeSingle();
+      if (ae) throw ae;
+
+      console.log('[profile] fetchBanner ok', a || null);
+      return a || null;
+    } catch (e) {
+      console.log('[profile] fetchBanner error', e);
+      return null;
+    }
+  }
+
+  const banner = await fetchBanner(userId);
+
+  // Build 3x3 grid from topList
+  const gridNine = (topList || []).slice(0, 9).map((x) => ({
+    id: x.anime_id,
+    title: x.title,
+    thumbnail_url: x.thumbnail_url ?? null,
+  }));
+
   const error = errors.length ? errors.join(' | ') : undefined;
 
   console.log('[profile] userId:', userId);
@@ -298,6 +354,9 @@ async function loadProfileData(): Promise<HookResult> {
     badges,
     topList,
     eleven,
+    banner,
+    gridNine,
+    demoUserId: DEMO_USER_ID,
     error,
   };
 }
