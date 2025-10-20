@@ -64,6 +64,22 @@ export default function ProfileScreen() {
           socials={data?.profile?.socials}
         />
 
+        {/* Badges directly UNDER the identity section (no title text) */}
+        {data?.badges?.length > 0 && (
+          <View style={styles.badgesRow}>
+            {data.badges.slice(0, 3).map((b: any, i: number) => (
+              <View key={b.badgeId ?? b.id ?? i} style={styles.badgePill}>
+                <Text style={styles.badgeText}>{b.name ?? "Badge"}</Text>
+              </View>
+            ))}
+            {data.badges.length > 3 && (
+              <View style={styles.badgePill}>
+                <Text style={styles.badgeText}>+{data.badges.length - 3}</Text>
+              </View>
+            )}
+          </View>
+        )}
+
         {/* Progress */}
         <Section style={styles.section}>
           <Text style={styles.h2}>Next Level Progress</Text>
@@ -82,18 +98,6 @@ export default function ProfileScreen() {
             <Stat label="Animes Watched"  value={data?.stats?.watched ?? 0} />
             <Stat label="Animes Reviewed" value={data?.stats?.reviewed ?? 0} />
             <Stat label="Account Score"   value={data?.score ?? 0} />
-          </View>
-        </Section>
-
-        {/* Badges */}
-        <Section style={styles.section}>
-          <Text style={styles.h2}>My Badges</Text>
-          <View style={styles.badgesRow}>
-            {(data?.badges?.length ? data.badges : ["Isekai Addict","Horror Connoisseur","Slice-of-Life Sage"]).map((b: any, i: number) => (
-              <Text key={i} style={styles.badge}>
-                {typeof b === "string" ? b : (b.name ?? "Badge")}
-              </Text>
-            ))}
           </View>
         </Section>
 
@@ -143,8 +147,9 @@ const styles = StyleSheet.create({
   statItem: { alignItems: "center", minWidth: 90 },
   statValue: { color: C.text, fontSize: 20, fontWeight: "700" },
   statLabel: { color: C.sub2, fontSize: 12, marginTop: 4, textAlign: "center" },
-  badgesRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 12 },
-  badge: { color: "#C7D2FE", fontSize: 12, backgroundColor: "rgba(99,102,241,0.15)", paddingHorizontal: 12, paddingVertical: 6, borderRadius: 999 },
+  badgesRow: { marginTop: 12, flexDirection: "row", flexWrap: "wrap", gap: 8, alignItems: "center" },
+  badgePill: { paddingHorizontal: 10, paddingVertical: 6, backgroundColor: "rgba(201,196,255,0.12)", borderRadius: 999 },
+  badgeText: { color: "#C9C4FF", fontSize: 13, fontWeight: "500" },
   errBox: { backgroundColor: "rgba(239,68,68,0.15)", borderColor: "#7F1D1D", borderWidth: 1, borderRadius: 12, padding: 8, marginTop: 16 },
   errText: { color: "#fecaca", fontSize: 12 },
   overlay: {
