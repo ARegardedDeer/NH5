@@ -28,9 +28,10 @@ export default function ProfileScreen() {
   );
 
   return (
-    <SafeAreaView edges={["top"]} style={{ flex: 1, backgroundColor: C.bg }}>
+    <SafeAreaView edges={["top"]} style={styles.root}>
       <ScrollView
-        contentContainerStyle={styles.container}
+        stickyHeaderIndices={[0]}
+        contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
         refreshControl={
@@ -38,20 +39,22 @@ export default function ProfileScreen() {
         }
       >
         {/* Header */}
-        <View style={styles.headerRow}>
-          <Avatar size={72} />
-          <View style={{ flex: 1 }}>
-            <Text style={styles.title} numberOfLines={1}>
-              {data?.profile?.handle ?? "NH Explorer"}
-            </Text>
-            {!!data?.profile?.handle && (
-              <Text style={styles.handle}>@{data.profile.handle}</Text>
-            )}
-            {!!data?.profile?.bio && (
-              <Text style={styles.body} numberOfLines={2}>{data.profile.bio}</Text>
-            )}
+        <View style={styles.headerSticky}>
+          <View style={styles.headerRow}>
+            <Avatar size={72} />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.title} numberOfLines={1}>
+                {data?.profile?.handle ?? "NH Explorer"}
+              </Text>
+              {!!data?.profile?.handle && (
+                <Text style={styles.handle}>@{data.profile.handle}</Text>
+              )}
+              {!!data?.profile?.bio && (
+                <Text style={styles.body} numberOfLines={2}>{data.profile.bio}</Text>
+              )}
+            </View>
+            <Text style={styles.edit}>Edit</Text>
           </View>
-          <Text style={styles.edit}>Edit</Text>
         </View>
 
         {/* Progress */}
@@ -139,8 +142,10 @@ export default function ProfileScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 32, flexGrow: 1 },
-  headerRow: { flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 24 },
+  root: { flex: 1, backgroundColor: C.bg },
+  scrollContent: { flexGrow: 1, paddingTop: 16, paddingBottom: 32, paddingHorizontal: 16 },
+  headerSticky: { backgroundColor: C.bg, paddingTop: 8, paddingBottom: 12 },
+  headerRow: { flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 12 },
   title: { color: C.text, fontSize: 20, fontWeight: "700" },
   handle: { color: C.sub2, marginTop: 2 },
   body: { color: C.sub, fontSize: 14 },
