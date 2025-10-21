@@ -3,7 +3,6 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { ScrollView, View, Text, RefreshControl, StyleSheet } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import useProfileData from "../hooks/useProfileData";
-import Section from "../../../ui/components/Section";
 import ProgressBar from "../../../ui/components/ProgressBar";
 import HeroBanner from "../components/HeroBanner";
 import GridNine from "../components/GridNine";
@@ -55,6 +54,7 @@ export default function ProfileScreen() {
           <RefreshControl tintColor={C.text} refreshing={isLoading} onRefresh={onRefresh} />
         }
       >
+        {console.log("[profile] render: Header")}
         <ProfileHeader
           displayName={data?.profile?.handle ?? "NH Explorer"}
           handle={data?.profile?.handle ?? null}
@@ -64,40 +64,57 @@ export default function ProfileScreen() {
           socials={data?.profile?.socials}
         />
 
-        {/* Progress */}
-        <Section style={styles.section}>
-          <Text style={styles.h2}>Next Level Progress</Text>
-          <View style={{ marginTop: 12 }}>
-            <ProgressBar value={data?.exp?.current ?? 0} total={data?.exp?.toNext ?? 2000} />
-            <Text style={styles.caption}>
-              {(data?.exp?.current ?? 0)}/{(data?.exp?.toNext ?? 2000)} XP
-            </Text>
-          </View>
-        </Section>
-
-        {/* Stats */}
-        <Section style={styles.section}>
-          <Text style={styles.h2}>My Stats</Text>
-          <View style={styles.statsRow}>
-            <Stat label="Animes Watched"  value={data?.stats?.watched ?? 0} />
-            <Stat label="Animes Reviewed" value={data?.stats?.reviewed ?? 0} />
-            <Stat label="Account Score"   value={data?.score ?? 0} />
-          </View>
-        </Section>
-
-        {/* Badges */}
-        <Section style={styles.section}>
-          <Text style={styles.h2}>My Badges</Text>
-          <View style={styles.badgesRow}>
-            {(data?.badges?.length ? data.badges : ["Isekai Addict","Horror Connoisseur","Slice-of-Life Sage"]).map((b: any, i: number) => (
-              <Text key={i} style={styles.badge}>
-                {typeof b === "string" ? b : (b.name ?? "Badge")}
-              </Text>
-            ))}
-          </View>
-        </Section>
+        {/* --- Badges (always render) --- */}
+        {console.log('[profile] badges payload:', {
+          isArray: Array.isArray(data?.badges),
+          count: Array.isArray(data?.badges) ? data.badges.length : 'n/a',
+        })}
+        <View
+          onLayout={(e) =>
+            console.log('[profile] badges container height=', e.nativeEvent.layout.height)
+          }
+          style={[
+            styles.badgesRow,
+            // DEV-only loud chrome:
+            __DEV__ && {
+              borderWidth: 2,
+              borderStyle: 'dashed',
+              borderColor: '#ff00ff',
+              backgroundColor: 'rgba(255,0,255,0.35)',
+              minHeight: 48,
+              paddingVertical: 8,
+              marginTop: 8,
+            },
+          ]}
+        >
+          {Array.isArray(data?.badges) && data.badges.length > 0 ? (
+            data.badges.slice(0, 3).map((badge, idx) => (
+              <View
+                key={badge.badge_id ?? badge.id ?? idx}
+                style={[
+                  styles.badgePill,
+                  __DEV__ && { borderWidth: 1, borderColor: '#00ff7f' },
+                ]}
+              >
+                <Text style={styles.badgeText}>
+                  {badge.badge_label ?? badge.label ?? badge.name ?? 'badge'}
+                </Text>
+              </View>
+            ))
+          ) : (
+            <>
+              <View style={[styles.badgePill, __DEV__ && { borderWidth: 1, borderColor: '#00ff7f' }]}>
+                <Text style={styles.badgeText}>dev: no badges</Text>
+              </View>
+              <View style={[styles.badgePill, __DEV__ && { borderWidth: 1, borderColor: '#00ff7f' }]}>
+                <Text style={styles.badgeText}>placeholder</Text>
+              </View>
+            </>
+          )}
+        </View>
 
         {/* --- 11/10 section REPLACED by Hero --- */}
+        {console.log("[profile] render: Banner")}
         {data?.banner?.thumbnail_url ? (
           <HeroBanner
             title={data.banner.title ?? ""}
@@ -107,11 +124,35 @@ export default function ProfileScreen() {
         {/* --- end replacement --- */}
 
         {/* Top List */}
+        {console.log("[profile] render: GridNine")}
         <GridNine
           items={data?.gridNine ?? []}
           elevenId={data?.eleven?.id ?? null}
           onPressItem={(id) => navigation.navigate("AnimeDetail", { id })}
         />
+
+        {console.log("[profile] render: Progress")}
+        {/* Progress */}
+        <View style={styles.section}>
+          <Text style={styles.h2}>Next Level Progress</Text>
+          <View style={{ marginTop: 12 }}>
+            <ProgressBar value={data?.exp?.current ?? 0} total={data?.exp?.toNext ?? 2000} />
+            <Text style={styles.caption}>
+              {(data?.exp?.current ?? 0)}/{(data?.exp?.toNext ?? 2000)} XP
+            </Text>
+          </View>
+        </View>
+
+        {console.log("[profile] render: Stats")}
+        {/* Stats */}
+        <View style={styles.section}>
+          <Text style={styles.h2}>My Stats</Text>
+          <View style={styles.statsRow}>
+            <Stat label="Animes Watched"  value={data?.stats?.watched ?? 0} />
+            <Stat label="Animes Reviewed" value={data?.stats?.reviewed ?? 0} />
+            <Stat label="Account Score"   value={data?.score ?? 0} />
+          </View>
+        </View>
 
         {!!error && __DEV__ && (
           <View style={styles.errBox}>
@@ -120,6 +161,7 @@ export default function ProfileScreen() {
         )}
       </ScrollView>
 
+      {console.log("[profile] render order OK (Header > Badges > Banner > Grid > Progress > Stats)")}
       {showOverlay ? (
         <View style={styles.overlay} pointerEvents="none">
           <Text style={styles.overlayLabel}>[profile] debug avatar overlay</Text>
@@ -146,8 +188,33 @@ const styles = StyleSheet.create({
   statItem: { alignItems: "center", minWidth: 90 },
   statValue: { color: C.text, fontSize: 20, fontWeight: "700" },
   statLabel: { color: C.sub2, fontSize: 12, marginTop: 4, textAlign: "center" },
-  badgesRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 12 },
-  badge: { color: "#C7D2FE", fontSize: 12, backgroundColor: "rgba(99,102,241,0.15)", paddingHorizontal: 12, paddingVertical: 6, borderRadius: 999 },
+  badgesContainer: {
+    marginTop: 8,
+    marginBottom: 8,
+  },
+  badgesRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    alignItems: "center",
+    gap: 8,
+  },
+  badgePill: {
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 16,
+    backgroundColor: "rgba(201,196,255,0.12)",
+  },
+  badgeMorePill: {
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 16,
+    backgroundColor: "rgba(201,196,255,0.18)",
+  },
+  badgeText: {
+    color: "#C9C4FF",
+    fontSize: 13,
+    fontWeight: "500",
+  },
   errBox: { backgroundColor: "rgba(239,68,68,0.15)", borderColor: "#7F1D1D", borderWidth: 1, borderRadius: 12, padding: 8, marginTop: 16 },
   errText: { color: "#fecaca", fontSize: 12 },
   overlay: {

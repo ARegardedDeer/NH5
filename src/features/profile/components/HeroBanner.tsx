@@ -21,6 +21,7 @@ export default function HeroBanner({ title, imageUri }: Props) {
           blurRadius={12}
           resizeMode="cover"
           style={styles.bg}
+          imageStyle={styles.bgImage}
         >
           <View style={styles.overlay} pointerEvents="none" />
           <View style={styles.content}>
@@ -44,12 +45,14 @@ export default function HeroBanner({ title, imageUri }: Props) {
 }
 
 const styles = StyleSheet.create({
-  container: { width: '100%', height: HERO_H, marginBottom: 12 },
+  container: { width: '100%', height: HERO_H, marginBottom: 12, borderRadius: 16, overflow: 'hidden' },
   bg: { flex: 1, justifyContent: 'flex-end' },
+  bgImage: { borderRadius: 16 },
   overlay: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: 'rgba(10,10,14,0.45)',
     zIndex: 0,
+    borderRadius: 16,
   },
   title: {
     color: '#fff',

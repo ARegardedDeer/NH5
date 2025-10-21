@@ -33,8 +33,8 @@ export default function ProfileHeader({
       style={styles.container}
       onLayout={(event) => {
         if (__DEV__) {
-          const { x, y, width, height } = event.nativeEvent.layout;
-          console.log('[profile] header onLayout', { x, y, width, height });
+          const { height } = event.nativeEvent.layout;
+          console.log('[profile] header onLayout height=', height);
         }
       }}
     >
@@ -71,10 +71,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     minHeight: 112,
     zIndex: 10,
-    gap: 16,
+    gap: 6,
     paddingTop: 8,
-    paddingBottom: 16,
-    marginBottom: 16,
+    paddingBottom: 8,
+    marginBottom: 8,
   },
   textBlock: {
     flex: 1,

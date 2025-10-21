@@ -28,6 +28,7 @@ export type ProfileBadge = {
   isShowcased: boolean;
   unlockedAt: string | null;
   name?: string | null;
+  label?: string;
 };
 
 export type TopListEntry = {
@@ -174,42 +175,107 @@ async function fetchProfileBasics(userId: string): Promise<{ profile: ProfileBas
   }
 }
 
-async function fetchBadges(userId: string): Promise<{ badges: ProfileBadge[]; error?: string }> {
+// --- badges fetch (schema-safe, two-step, with diagnostics) ---
+async function fetchBadges(userId: string) {
   try {
-    const { data, error } = await supabase
-      .from('user_badges')
-      .select('badge_id,is_showcased,unlocked_at')
-      .eq('user_id', userId)
-      .order('unlocked_at', { ascending: false });
-
-    if (error) {
-      console.warn('[profile] fetchBadges error', error.message);
-      return { badges: [], error: error.message };
+    if (__DEV__) {
+      console.log('[profile] badges: start for user', userId);
     }
 
-    const badges = (data ?? [])
-      .map((row: any) => {
-        const badgeId = row?.badge_id;
-        if (!badgeId) {
-          return null;
-        }
-        return {
-          badgeId,
-          id: badgeId,
-          isShowcased: Boolean(row?.is_showcased),
-          unlockedAt: row?.unlocked_at ?? null,
-          name: null,
-        } as ProfileBadge;
-      })
-      .filter(Boolean) as ProfileBadge[];
+    // STEP 1: get the user's badge rows (no join assumptions)
+    const ubRes = await supabase
+      .from('user_badges')
+      .select('badge_id, unlocked_at, is_showcased')
+      .eq('user_id', userId);
 
-    console.log('[profile] fetchBadges ok', { count: badges.length });
+    if (ubRes.error) {
+      if (__DEV__) {
+        console.warn('[profile] badges: user_badges error', ubRes.error);
+      }
+      return { badges: [], error: ubRes.error };
+    }
 
-    return { badges };
-  } catch (err: any) {
-    const message = err?.message ?? String(err);
-    console.warn('[profile] fetchBadges error', message);
-    return { badges: [], error: message };
+    const userRows = ubRes.data ?? [];
+    if (__DEV__) {
+      console.log('[profile] badges: user_badges rows', userRows.length,
+        userRows.slice(0, 3));
+    }
+
+    if (userRows.length === 0) {
+      if (__DEV__) {
+        console.log('[profile] badges: none for user');
+      }
+      return { badges: [], error: null };
+    }
+
+    // STEP 2: fetch the badge metadata for those ids
+    const badgeIds = Array.from(
+      new Set(userRows.map(r => r.badge_id).filter(Boolean))
+    );
+
+    const bRes = await supabase
+      .from('badges')
+      .select('id, name, slug, description, type, tier')
+      .in('id', badgeIds);
+
+    if (bRes.error) {
+      if (__DEV__) {
+        console.warn('[profile] badges: badges error', bRes.error);
+      }
+      return { badges: [], error: bRes.error };
+    }
+
+    const badgeRows = bRes.data ?? [];
+    if (__DEV__) {
+      console.log('[profile] badges: badges rows', badgeRows.length,
+        badgeRows.slice(0, 3));
+    }
+
+    // Build lookup id -> metadata
+    const byId = new Map<string, any>(
+      badgeRows.map(b => [String(b.id), b])
+    );
+
+    // Map user_badges + metadata to the UI shape expected elsewhere.
+    // Display label derives from name || slug (no non-existent fields).
+    const mapped = userRows.map((r) => {
+      const meta = byId.get(String(r.badge_id));
+      const label =
+        (meta?.name && String(meta.name).trim()) ||
+        (meta?.slug && String(meta.slug).trim()) ||
+        String(r.badge_id);
+
+      return {
+        badgeId: String(r.badge_id),
+        id: String(r.badge_id),
+        badge_id: String(r.badge_id),
+        isShowcased: !!r.is_showcased,
+        unlockedAt: r.unlocked_at ?? null,
+        label,
+        name: label,
+      } as ProfileBadge;
+    });
+
+    // Optional: keep order stable by unlocked_at desc, then label asc
+    mapped.sort((a, b) => {
+      const aT = a.unlockedAt ? new Date(a.unlockedAt).getTime() : 0;
+      const bT = b.unlockedAt ? new Date(b.unlockedAt).getTime() : 0;
+      if (bT !== aT) return bT - aT;
+      return (a.label ?? '').localeCompare(b.label ?? '');
+    });
+
+    if (__DEV__) {
+      const sampleLabels = mapped.slice(0, 5).map(x => x.label);
+      console.log('[profile] badges: mapped count', mapped.length,
+        'labels:', sampleLabels);
+    }
+
+    return { badges: mapped, error: null };
+  } catch (e) {
+    if (__DEV__) {
+      console.warn('[profile] badges: unexpected error', e);
+    }
+    return { badges: [], error: e };
   }
 }
 async function fetchTopList(userId: string): Promise<{ topList: TopListEntry[]; error?: string }> {
