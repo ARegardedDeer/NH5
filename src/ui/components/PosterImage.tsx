@@ -1,7 +1,9 @@
 import React from 'react';
 import { Image, View, Text } from 'react-native';
 
-export default function PosterImage({ uri, width = 90 }: { uri?: string | null; width?: number }) {
+export default function PosterImage(props: { uri?: string | null; width?: number }) {
+  console.log('[PosterImage] props:', props);
+  const { uri, width = 90 } = props;
   const height = Math.round((width * 4) / 3);
 
   if (uri) {

@@ -50,6 +50,14 @@ export type GridNineItem = {
   id: string;
   title: string;
   thumbnail_url: string | null;
+  position: number;
+};
+
+export type BannerEntry = {
+  id: string;
+  title: string;
+  thumbnail_url: string | null;
+  position: number;
 };
 
 export type HookResult = {
@@ -57,7 +65,7 @@ export type HookResult = {
   badges: ProfileBadge[];
   topList: TopListEntry[];
   eleven: ElevenAnime;
-  banner: ElevenAnime;
+  banner: BannerEntry | null;
   gridNine: GridNineItem[];
   demoUserId: string;
   error?: string;
@@ -302,44 +310,33 @@ async function loadProfileData(): Promise<HookResult> {
 
   const eleven = await fetchEleven(userId);
 
-  async function fetchBanner(userId: string) {
-    try {
-      // read banner_anime_id from user_profiles
-      const { data: prof, error: pe } = await supabase
-        .from('user_profiles')
-        .select('banner_anime_id')
-        .eq('user_id', userId)
-        .maybeSingle();
-      if (pe) throw pe;
+  const banner = topList.length > 0
+    ? {
+        id: topList[0].id ?? topList[0].anime_id,
+        title: topList[0].title ?? '',
+        thumbnail_url: topList[0].thumbnail_url ?? topList[0].thumbnailUrl ?? null,
+        position: topList[0].position ?? 1,
+      }
+    : null;
 
-      const bannerId = prof?.banner_anime_id;
-      // default to eleven if no explicit banner
-      const chosenId = bannerId || eleven?.id || null;
-      if (!chosenId) return null;
+  const bannerId = banner?.id ?? null;
+  const gridNineBase = topList
+    .filter((entry) => (entry.id ?? entry.anime_id) !== bannerId)
+    .slice(0, 9)
+    .map((entry) => ({
+      id: entry.id ?? entry.anime_id,
+      title: entry.title ?? '',
+      thumbnail_url: entry.thumbnail_url ?? entry.thumbnailUrl ?? null,
+      position: entry.position ?? 0,
+    }));
 
-      const { data: a, error: ae } = await supabase
-        .from('anime')
-        .select('id,title,thumbnail_url')
-        .eq('id', chosenId)
-        .maybeSingle();
-      if (ae) throw ae;
-
-      console.log('[profile] fetchBanner ok', a || null);
-      return a || null;
-    } catch (e) {
-      console.log('[profile] fetchBanner error', e);
-      return null;
-    }
-  }
-
-  const banner = await fetchBanner(userId);
-
-  // Build 3x3 grid from topList
-  const gridNine = (topList || []).slice(0, 9).map((x) => ({
-    id: x.anime_id,
-    title: x.title,
-    thumbnail_url: x.thumbnail_url ?? null,
-  }));
+  const seen = new Set<string>();
+  const gridNineDedup = gridNineBase.filter((item) => {
+    if (!item.id) return false;
+    if (seen.has(item.id)) return false;
+    seen.add(item.id);
+    return true;
+  });
 
   const error = errors.length ? errors.join(' | ') : undefined;
 
@@ -348,6 +345,8 @@ async function loadProfileData(): Promise<HookResult> {
   console.log('[profile] fetchProfileBasics ok', profile);
   console.log('[profile] fetchBadges ok', badges);
   console.log('[profile] eleven:', eleven);
+  console.log('[profile] banner derived:', banner ? { id: banner.id, title: banner.title } : null);
+  console.log('[profile] gridNine(count):', gridNineDedup.length, 'sample:', gridNineDedup.slice(0, 3).map((g) => g.title));
 
   return {
     profile,
@@ -355,7 +354,7 @@ async function loadProfileData(): Promise<HookResult> {
     topList,
     eleven,
     banner,
-    gridNine,
+    gridNine: gridNineDedup,
     demoUserId: DEMO_USER_ID,
     error,
   };

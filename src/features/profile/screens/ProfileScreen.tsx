@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { ScrollView, View, Text, RefreshControl, StyleSheet } from "react-native";
+import { useNavigation } from "@react-navigation/native";
 import useProfileData from "../hooks/useProfileData";
 import Section from "../../../ui/components/Section";
 import ProgressBar from "../../../ui/components/ProgressBar";
@@ -17,6 +18,7 @@ const C = {
 };
 
 export default function ProfileScreen() {
+  const navigation = useNavigation<any>();
   const { data, isLoading, refetch, error } = useProfileData();
   const [showOverlay, setShowOverlay] = useState(true);
 
@@ -33,8 +35,6 @@ export default function ProfileScreen() {
       <Text style={styles.statLabel}>{label}</Text>
     </View>
   );
-
-  const featuredThumbnail = data?.banner?.thumbnail_url ?? data?.eleven?.thumbnail_url ?? null;
 
   const hasLoggedUiMount = React.useRef(false);
 
@@ -98,17 +98,20 @@ export default function ProfileScreen() {
         </Section>
 
         {/* --- 11/10 section REPLACED by Hero --- */}
-        {(data?.banner || data?.eleven) ? (
+        {data?.banner?.thumbnail_url ? (
           <HeroBanner
-            title={(data?.banner?.title ?? data?.eleven?.title) || ''}
-            thumbnailUrl={featuredThumbnail}
-            subtitle={data?.profile?.handle ? `@${data.profile.handle}` : undefined}
+            title={data.banner.title ?? ""}
+            imageUri={data.banner.thumbnail_url ?? undefined}
           />
         ) : null}
         {/* --- end replacement --- */}
 
         {/* Top List */}
-        <GridNine data={data?.gridNine ?? []} elevenId={data?.eleven?.id ?? undefined} />
+        <GridNine
+          items={data?.gridNine ?? []}
+          elevenId={data?.eleven?.id ?? null}
+          onPressItem={(id) => navigation.navigate("AnimeDetail", { id })}
+        />
 
         {!!error && __DEV__ && (
           <View style={styles.errBox}>
