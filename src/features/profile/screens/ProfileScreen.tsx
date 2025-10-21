@@ -21,6 +21,13 @@ export default function ProfileScreen() {
   const { data, isLoading, refetch, error } = useProfileData();
   const [showOverlay, setShowOverlay] = useState(true);
 
+  // Run the guard once on mount in dev
+  useEffect(() => {
+    if (__DEV__) {
+      import('../../../dev/schemaGuard').then(m => m.runSchemaGuard());
+    }
+  }, []);
+
   useEffect(() => {
     const timeout = setTimeout(() => setShowOverlay(false), 4000);
     return () => clearTimeout(timeout);
@@ -43,6 +50,35 @@ export default function ProfileScreen() {
       hasLoggedUiMount.current = true;
     }
   }, [data?.gridNine?.length]);
+
+  // Badge label sanity log
+  if (__DEV__ && Array.isArray(data?.badges)) {
+    const labels = data!.badges.map((b: any) =>
+      b.badge_label ?? b.label ?? b.name ?? b.slug ?? b.badge_id ?? 'badge'
+    );
+    console.log('[profile] badges render labels:', labels);
+  }
+
+  // --- FEATURED + GRID (deduped) ---
+  const topList = Array.isArray(data?.topList) ? data!.topList : [];
+
+  // Prefer explicit banner if present; otherwise top1; otherwise eleven; otherwise null
+  const featured = data?.banner ?? topList[0] ?? data?.eleven ?? null;
+  const featuredId = featured?.id ?? null;
+
+  const featuredTitle = featured?.title ?? '';
+  const featuredThumbnail = featured?.thumbnail_url ?? undefined;
+
+  // Grid = top list minus the featured, capped to 9 items
+  const gridItems = topList.filter(a => a?.id !== featuredId).slice(0, 9);
+
+  // Dev diagnostics (safe in prod since wrapped with __DEV__)
+  if (__DEV__) {
+    console.log('[profile] topList titles:', topList.map(a => a?.title));
+    console.log('[profile] featuredId:', featuredId, 'title:', featuredTitle);
+    console.log('[profile] grid items:', gridItems.map(a => a?.title));
+  }
+  // --- END FEATURED + GRID ---
 
   return (
     <SafeAreaView edges={["top"]} style={styles.root}>
@@ -115,10 +151,10 @@ export default function ProfileScreen() {
 
         {/* --- 11/10 section REPLACED by Hero --- */}
         {console.log("[profile] render: Banner")}
-        {data?.banner?.thumbnail_url ? (
+        {featuredThumbnail ? (
           <HeroBanner
-            title={data.banner.title ?? ""}
-            imageUri={data.banner.thumbnail_url ?? undefined}
+            title={featuredTitle}
+            imageUri={featuredThumbnail}
           />
         ) : null}
         {/* --- end replacement --- */}
@@ -126,8 +162,8 @@ export default function ProfileScreen() {
         {/* Top List */}
         {console.log("[profile] render: GridNine")}
         <GridNine
-          items={data?.gridNine ?? []}
-          elevenId={data?.eleven?.id ?? null}
+          items={gridItems}
+          elevenId={data?.eleven?.id}
           onPressItem={(id) => navigation.navigate("AnimeDetail", { id })}
         />
 

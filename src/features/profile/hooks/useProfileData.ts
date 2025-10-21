@@ -280,47 +280,89 @@ async function fetchBadges(userId: string) {
 }
 async function fetchTopList(userId: string): Promise<{ topList: TopListEntry[]; error?: string }> {
   try {
-    void userId;
-    const { data, error } = await supabase
-      .from('anime')
-      .select('id,title,thumbnail_url')
-      .order('title', { ascending: true })
-      .limit(10);
+    const primaryTable = 'user_toplist';
+    const fallbackTable = 'user_top_list';
 
-    if (error) {
-      console.warn('[profile] fetchTopList error', error.message);
-      return { topList: [], error: error.message };
+    // Step A: try primary
+    const ub = await supabase
+      .from(primaryTable)
+      .select('position, anime_id')
+      .eq('user_id', userId)
+      .order('position', { ascending: true });
+
+    if (__DEV__) {
+      console.log('[TopList] table=', primaryTable, 'userId=', userId, 'rows=', ub.data?.length ?? 0, 'error=', ub.error?.message ?? 'none');
     }
 
-    const rows = Array.isArray(data) ? data : [];
-    const topList = rows
-      .map((row: any, index: number) => {
-        const animeId = typeof row?.id === 'string' ? row.id : null;
-        if (!animeId) {
-          return null;
-        }
-        const title = typeof row?.title === 'string' ? row.title : '';
-        const thumbnail = typeof row?.thumbnail_url === 'string' ? row.thumbnail_url : null;
-        return {
-          position: index + 1,
-          id: animeId,
-          anime_id: animeId,
-          title,
-          thumbnailUrl: thumbnail,
-          thumbnail_url: thumbnail,
-          note: null,
-        } as TopListEntry;
-      })
-      .filter(Boolean) as TopListEntry[];
+    let rows = ub.data ?? [];
+    let err = ub.error;
 
-    console.log('[profile] fetchTopList ok', { count: topList.length });
-    if (topList.length > 0) {
+    // Step B: fallback if empty and no error
+    if (!err && rows.length === 0) {
+      const fb = await supabase
+        .from(fallbackTable)
+        .select('position, anime_id')
+        .eq('user_id', userId)
+        .order('position', { ascending: true });
+      if (__DEV__) {
+        console.log('[TopList] table=', fallbackTable, 'userId=', userId, 'rows=', fb.data?.length ?? 0, 'error=', fb.error?.message ?? 'none');
+      }
+      rows = fb.data ?? [];
+      err = fb.error;
+    }
+
+    if (err) {
+      const message = err.message ?? 'unknown error';
+      console.warn('[profile] fetchTopList error', message);
+      return { topList: [], error: message };
+    }
+
+    if (rows.length === 0) {
+      if (__DEV__) {
+        console.log('[TopList] empty after tables user_toplist/user_top_list; error=none');
+      }
+      return { topList: [] };
+    }
+
+    // Step C: fetch anime metadata
+    const ids = rows.map(r => r.anime_id);
+    const ares = await supabase
+      .from('anime')
+      .select('id,title,thumbnail_url')
+      .in('id', ids);
+
+    if (__DEV__) {
+      console.log('[TopList] anime rows=', ares.data?.length ?? 0, 'error=', ares.error?.message ?? 'none', 'first_title=', ares.data?.[0]?.title ?? 'N/A');
+    }
+
+    if (ares.error) {
+      const message = ares.error.message ?? 'unknown error';
+      console.warn('[profile] fetchTopList error', message);
+      return { topList: [], error: message };
+    }
+
+    const byId = new Map((ares.data ?? []).map(a => [a.id, a]));
+    const topList: TopListEntry[] = rows.map(r => {
+      const a = byId.get(r.anime_id);
+      return {
+        id: r.anime_id,
+        anime_id: r.anime_id,
+        title: a?.title ?? '(unknown)',
+        thumbnailUrl: a?.thumbnail_url ?? null,
+        thumbnail_url: a?.thumbnail_url ?? null,
+        position: r.position,
+        note: null,
+      } as TopListEntry;
+    });
+
+    if (__DEV__) {
+      console.log('[profile] fetchTopList ok', { count: topList.length });
       console.log('[profile] fetchTopList sample', topList.slice(0, 3));
     }
 
     return { topList };
-  } catch (err: any) {
-    const message = err?.message ?? String(err);
+  } catch (e: any) {
+    const message = e?.message ?? String(e);
     console.warn('[profile] fetchTopList error', message);
     return { topList: [], error: message };
   }
