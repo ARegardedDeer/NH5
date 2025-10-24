@@ -16,7 +16,7 @@ import { useAnimeById } from '../hooks/useAnimeById';
 import { useMyRating } from '../hooks/useMyRating';
 import { theme } from '../../../ui/theme';
 import { RatingPicker } from '../components/RatingPicker';
-import { supabase } from '../../../db/supabaseClient';
+import { supabase, whenAuthed } from '../../../db/supabaseClient';
 
 const DEV = __DEV__;
 const HIT_SLOP = { top: 8, right: 8, bottom: 8, left: 8 };
@@ -63,6 +63,8 @@ export default function AnimeDetailScreen() {
   const [statusMenuOpen, setStatusMenuOpen] = useState(false);
   const [isStoryExpanded, setIsStoryExpanded] = useState(false);
   const [hasUserListsTable, setHasUserListsTable] = useState(false);
+  const [authReady, setAuthReady] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     setScore(initialScore);
@@ -73,48 +75,58 @@ export default function AnimeDetailScreen() {
     setIsStoryExpanded(false);
   }, [data?.synopsis]);
 
+  // Auth gate: wait for dev session to be ready
   useEffect(() => {
-    let isActive = true;
-    setBookmarked(false);
-    setStatus(null);
-    setStatusMenuOpen(false);
+    let alive = true;
+    if (DEV) console.log('[auth] ui gate: waiting...');
+    whenAuthed.finally(() => {
+      if (!alive) return;
+      setAuthReady(true);
+      if (DEV) console.log('[auth] ui gate: ready=true');
+    });
+    return () => { alive = false; };
+  }, []);
 
-    const probeAndLoad = async () => {
-      const { error: probeError } = await supabase.from('user_lists').select('anime_id').limit(0);
-      const tablePresent = !probeError;
-      if (DEV) {
-        const errorMsg = probeError?.message ?? probeError?.code ?? 'none';
-        console.log(`[anime] lists: probe user_lists => ${tablePresent ? 'present' : 'absent'} (error=${probeError ? errorMsg : 'none'})`);
-      }
-      if (!isActive) return;
-      setHasUserListsTable(tablePresent);
-      if (!tablePresent) return;
+  // Refactored loader: gate on authReady, load user_lists row
+  const loadUserListRow = useCallback(async () => {
+    if (!authReady) return;
+    if (!id) return;
 
-      const currentUserId = await getCurrentUserId();
-      if (!isActive || !currentUserId) return;
+    const { data: user } = await supabase.auth.getUser();
+    const currentUserId = user?.user?.id ?? null;
+    if (!currentUserId) return;
 
-      const { data: rows, error: loadError } = await supabase
-        .from('user_lists')
-        .select('status, bookmarked')
-        .eq('user_id', currentUserId)
-        .eq('anime_id', id)
-        .limit(1);
+    const { data: rows, error } = await supabase
+      .from('user_lists')
+      .select('status,bookmarked')
+      .eq('user_id', currentUserId)
+      .eq('anime_id', id)
+      .limit(1);
 
-      if (!isActive || loadError || !rows?.length) return;
+    if (DEV) {
+      console.log('[anime] load user_lists:', {
+        userId: currentUserId,
+        animeId: id,
+        rows: rows?.length ?? 0,
+        error: error?.message ?? 'none',
+        data: rows?.[0] ?? null,
+      });
+    }
 
-      const row = rows[0] as { status?: string | null; bookmarked?: boolean | null };
-      if (typeof row.bookmarked === 'boolean') {
-        setBookmarked(row.bookmarked);
-      }
-      const normalized = normalizeStatus(row.status);
-      setStatus(normalized);
-    };
+    if (rows && rows[0]) {
+      setBookmarked(!!rows[0].bookmarked);
+      setStatus(rows[0].status ?? null);
+    } else {
+      // no row: reflect defaults
+      setBookmarked(false);
+      setStatus(null);
+    }
+  }, [authReady, id]);
 
-    probeAndLoad();
-    return () => {
-      isActive = false;
-    };
-  }, [id]);
+  // Run loader when auth is ready, on id changes, and after writes (reloadKey)
+  useEffect(() => {
+    loadUserListRow();
+  }, [loadUserListRow, reloadKey]);
 
   // keep exclusivity in UI
   const onPickScore = (n: number) => {
@@ -204,6 +216,9 @@ export default function AnimeDetailScreen() {
       const statusLabel = status ?? 'none';
       console.log(`[anime] lists: user=${userId ?? 'none'} anime=${id} op=toggle status=${statusLabel} persisted=${persisted}`);
     }
+    if (persisted) {
+      setReloadKey((k) => k + 1);
+    }
   }, [bookmarked, id, persistUserList, status]);
 
   const onToggleStatusMenu = useCallback(() => {
@@ -221,6 +236,9 @@ export default function AnimeDetailScreen() {
         console.log(
           `[anime] lists: user=${userId ?? 'none'} anime=${id} op=status status=${next} persisted=${persisted}`
         );
+      }
+      if (persisted) {
+        setReloadKey((k) => k + 1);
       }
     },
     [bookmarked, id, persistUserList]

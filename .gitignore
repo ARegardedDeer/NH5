@@ -9,3 +9,6 @@ build/
 
 # Xcode UI state (ignore)
 *.xcuserstate
+
+# Dev-only auth credentials
+src/dev/devAuth.ts

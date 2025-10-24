@@ -21,4 +21,43 @@ try {
   console.log('[NH5] Failed to parse Supabase URL');
 }
 
+// __DEV__ auto sign-in (isolated to dev builds; no prod impact)
+async function ensureDevSession() {
+  if (!__DEV__) return;
+  try {
+    // dynamic import so this file stays optional and dev-only
+    const { DEV_AUTH } = await import('../dev/devAuth');
+    const { data: sessionData } = await supabase.auth.getSession();
+    if (sessionData?.session?.user) {
+      console.log('[auth] ensureDevSession: session ok user=', sessionData.session.user.id);
+      return;
+    }
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email: DEV_AUTH.email,
+      password: DEV_AUTH.password,
+    });
+    if (error) {
+      console.warn('[auth] ensureDevSession error', error.message);
+      return;
+    }
+    console.log('[auth] ensureDevSession: signed in ok=', !!data.user, 'user=', data.user?.id ?? null);
+  } catch (e: any) {
+    console.warn('[auth] ensureDevSession fallback (devAuth missing or other error):', e?.message ?? String(e));
+  }
+}
+
+// Kick off dev session in background so it doesn't block app boot
+ensureDevSession();
+
+export const whenAuthed: Promise<void> = (async () => {
+  try {
+    await ensureDevSession();
+  } catch (e) {
+    if (__DEV__) {
+      const msg = (e as any)?.message ?? String(e);
+      console.warn('[auth] ui gate error:', msg);
+    }
+  }
+})();
+
 export default supabase;
