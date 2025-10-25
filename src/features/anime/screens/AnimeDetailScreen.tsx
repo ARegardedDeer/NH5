@@ -78,18 +78,34 @@ export default function AnimeDetailScreen() {
   const [myRating, setMyRating] = useState<number | null>(null);
   const [myRatingLoading, setMyRatingLoading] = useState(false);
   const [savingMyRating, setSavingMyRating] = useState(false);
+  const [supportsUserRating, setSupportsUserRating] = useState(true);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [ratingUIOpen, setRatingUIOpen] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [toast, setToast] = useState({ visible: false, message: '' });
   const [railWidth, setRailWidth] = useState(0);
 
   const myRatingPrevRef = useRef<number | null>(null);
+  const myRatingDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isMountedRef = useRef(true);
   const lastHapticValue = useRef<number>(0);
   const thumbAnim = useRef(new Animated.Value(28)).current;
 
   useEffect(() => {
     setIsStoryExpanded(false);
   }, [data?.synopsis]);
+
+  // Cleanup mounted ref and debounce on unmount
+  useEffect(
+    () => () => {
+      isMountedRef.current = false;
+      if (myRatingDebounceRef.current) {
+        clearTimeout(myRatingDebounceRef.current);
+        myRatingDebounceRef.current = null;
+      }
+    },
+    []
+  );
 
   // Auth gate: wait for dev session to be ready
   useEffect(() => {
@@ -344,6 +360,25 @@ export default function AnimeDetailScreen() {
     []
   );
 
+  const onSetEleven = async () => {
+    try {
+      const userId = await getCurrentUserId();
+      if (!userId) {
+        Alert.alert('Error', 'Could not determine user ID');
+        return;
+      }
+      const { error } = await supabase
+        .from('user_eleven')
+        .upsert({ user_id: userId, anime_id: id }, { onConflict: 'user_id' });
+      if (error) throw error;
+      console.log('[profile] setEleven ok', { userId, animeId: id });
+      setRatingUIOpen(false);
+      Alert.alert('Saved', 'This is now your 11/10 highlight!');
+    } catch (e: any) {
+      console.warn('[profile] setEleven error', e);
+      Alert.alert('Error', 'Could not set 11/10.');
+    }
+  };
 
   const onToggleBookmark = useCallback(async () => {
     const next = !bookmarked;
@@ -872,6 +907,13 @@ export default function AnimeDetailScreen() {
               </TouchableOpacity>
             </View>
 
+            <TouchableOpacity
+              style={styles.elevenButton}
+              onPress={onSetEleven}
+            >
+              <Text style={styles.elevenButtonText}>⭐ Set as 11/10 ⭐</Text>
+            </TouchableOpacity>
+
             <View style={styles.sliderContainer}>
               <Text style={styles.sliderValue}>
                 {myRating !== null ? myRating.toFixed(1) : '–'}
@@ -1177,7 +1219,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 24,
+    marginBottom: 16,
   },
   modalTitle: {
     color: '#FFFFFF',
@@ -1188,6 +1230,23 @@ const styles = StyleSheet.create({
     color: '#A1A1AA',
     fontSize: 24,
     fontWeight: '300',
+  },
+
+  // 11/10 button
+  elevenButton: {
+    backgroundColor: 'rgba(251, 191, 36, 0.15)',
+    borderWidth: 2,
+    borderColor: '#FBB024',
+    borderRadius: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    marginBottom: 20,
+    alignItems: 'center',
+  },
+  elevenButtonText: {
+    color: '#FBB024',
+    fontSize: 16,
+    fontWeight: '700',
   },
 
   // Slider styles
