@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -17,10 +17,15 @@ import { useMyRating } from '../hooks/useMyRating';
 import { theme } from '../../../ui/theme';
 import { RatingPicker } from '../components/RatingPicker';
 import { supabase, whenAuthed } from '../../../db/supabaseClient';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const DEV = __DEV__;
+const DEV_VERBOSE = __DEV__ && false; // flip to true for deep debugging
 const HIT_SLOP = { top: 8, right: 8, bottom: 8, left: 8 };
 const STATUSES = ['Watching', 'On Hold', 'Completed', 'Dropped', 'Plan to Watch'] as const;
+
+// Cache key with version for safe invalidation (bump v1 -> v2 on schema changes)
+const getUserListCacheKey = (animeId: string) => `nh5::user_list::${animeId}::v1`;
 
 type StatusOption = (typeof STATUSES)[number];
 
@@ -65,11 +70,31 @@ export default function AnimeDetailScreen() {
   const [hasUserListsTable, setHasUserListsTable] = useState(false);
   const [authReady, setAuthReady] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
+  const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
+  const [myRating, setMyRating] = useState<number | null>(null);
+  const [myRatingLoading, setMyRatingLoading] = useState(false);
+  const [savingMyRating, setSavingMyRating] = useState(false);
+  const myRatingPrevRef = useRef<number | null>(null);
+  const myRatingDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isMountedRef = useRef(true);
+  const [supportsUserRating, setSupportsUserRating] = useState(true);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
 
   useEffect(() => {
     setScore(initialScore);
     setIsEleven(initialEleven);
   }, [initialScore, initialEleven]);
+
+  useEffect(
+    () => () => {
+      isMountedRef.current = false;
+      if (myRatingDebounceRef.current) {
+        clearTimeout(myRatingDebounceRef.current);
+        myRatingDebounceRef.current = null;
+      }
+    },
+    []
+  );
 
   useEffect(() => {
     setIsStoryExpanded(false);
@@ -78,14 +103,29 @@ export default function AnimeDetailScreen() {
   // Auth gate: wait for dev session to be ready
   useEffect(() => {
     let alive = true;
-    if (DEV) console.log('[auth] ui gate: waiting...');
+    if (DEV_VERBOSE) console.log('[auth] ui gate: waiting...');
     whenAuthed.finally(() => {
       if (!alive) return;
       setAuthReady(true);
-      if (DEV) console.log('[auth] ui gate: ready=true');
+      if (DEV_VERBOSE) console.log('[auth] ui gate: ready=true');
     });
     return () => { alive = false; };
   }, []);
+
+  // Read cache immediately for instant render
+  useEffect(() => {
+    if (!id) return;
+    AsyncStorage.getItem(getUserListCacheKey(id))
+      .then(cached => {
+        if (cached) {
+          const { bookmarked, status } = JSON.parse(cached);
+          setBookmarked(!!bookmarked);
+          setStatus(status ?? null);
+          if (DEV_VERBOSE) console.log('[anime] cache hit:', { bookmarked, status });
+        }
+      })
+      .catch(() => {});
+  }, [id]);
 
   // Refactored loader: gate on authReady, load user_lists row
   const loadUserListRow = useCallback(async () => {
@@ -94,6 +134,7 @@ export default function AnimeDetailScreen() {
 
     const { data: user } = await supabase.auth.getUser();
     const currentUserId = user?.user?.id ?? null;
+    setCurrentUserId(currentUserId);
     if (!currentUserId) return;
 
     const { data: rows, error } = await supabase
@@ -103,7 +144,7 @@ export default function AnimeDetailScreen() {
       .eq('anime_id', id)
       .limit(1);
 
-    if (DEV) {
+    if (DEV_VERBOSE) {
       console.log('[anime] load user_lists:', {
         userId: currentUserId,
         animeId: id,
@@ -116,10 +157,17 @@ export default function AnimeDetailScreen() {
     if (rows && rows[0]) {
       setBookmarked(!!rows[0].bookmarked);
       setStatus(rows[0].status ?? null);
+      setHasLoadedOnce(true);
+      // Write cache for next time
+      AsyncStorage.setItem(getUserListCacheKey(id), JSON.stringify({
+        bookmarked: !!rows[0].bookmarked,
+        status: rows[0].status ?? null,
+      })).catch(() => {});
     } else {
       // no row: reflect defaults
       setBookmarked(false);
       setStatus(null);
+      setHasLoadedOnce(true);
     }
   }, [authReady, id]);
 
@@ -127,6 +175,35 @@ export default function AnimeDetailScreen() {
   useEffect(() => {
     loadUserListRow();
   }, [loadUserListRow, reloadKey]);
+
+  useEffect(() => {
+    if (!authReady || !id) return;
+    if (!supportsUserRating) {
+      setMyRatingLoading(false);
+      return;
+    }
+    if (!currentUserId) return;
+
+    let alive = true;
+    setMyRatingLoading(true);
+    loadMyRating(currentUserId, id).then((result) => {
+      if (!alive) return;
+      setSupportsUserRating(result.supported);
+      if (result.supported) {
+        setMyRating(result.rating);
+      }
+      setMyRatingLoading(false);
+    });
+
+    return () => {
+      alive = false;
+    };
+  }, [authReady, currentUserId, id, loadMyRating, supportsUserRating]);
+
+  useEffect(() => {
+    if (!id) return;
+    refreshSummary(id);
+  }, [id, refreshSummary]);
 
   // keep exclusivity in UI
   const onPickScore = (n: number) => {
@@ -142,6 +219,72 @@ export default function AnimeDetailScreen() {
   };
 
   const canSave = useMemo(() => isEleven || (score !== null && score >= 1 && score <= 10), [isEleven, score]);
+
+  const onPickMyRating = useCallback(
+    (value: number) => {
+      if (value < 1 || value > 10) return;
+      if (!id) return;
+
+      if (!supportsUserRating || !currentUserId) {
+        setMyRating(value);
+        if (DEV) console.log(`[ratings] upsert: persisted=false reason=schema score=${value}`);
+        return;
+      }
+
+      if (myRatingDebounceRef.current) {
+        clearTimeout(myRatingDebounceRef.current);
+      }
+
+      myRatingPrevRef.current = myRating;
+      setMyRating(value);
+      setSavingMyRating(true);
+
+      const userId = currentUserId;
+      myRatingDebounceRef.current = setTimeout(() => {
+        (async () => {
+          try {
+            const { error } = await supabase
+              .from('ratings')
+              .upsert(
+                {
+                  user_id: userId,
+                  anime_id: id,
+                  score_overall: value,
+                },
+                { onConflict: 'user_id,anime_id' }
+              );
+            if (error) {
+              const message = error.message || error.code || 'unknown';
+              if (message.includes('column') && message.includes('user_id')) {
+                if (DEV) console.log(`[ratings] upsert: persisted=false reason=schema score=${value}`);
+                setSupportsUserRating(false);
+                if (isMountedRef.current) {
+                  setSavingMyRating(false);
+                }
+                return;
+              }
+              throw error;
+            }
+            if (DEV) console.log(`[ratings] upsert: persisted=true score=${value}`);
+            await refreshSummary(id);
+          } catch (err: any) {
+            const message = err?.message ?? 'unknown';
+            if (DEV) console.log(`[ratings] upsert: persisted=false score=${value} error=${message}`);
+            if (isMountedRef.current) {
+              setMyRating(myRatingPrevRef.current ?? null);
+            }
+          } finally {
+            if (isMountedRef.current) {
+              setSavingMyRating(false);
+            }
+          }
+        })().finally(() => {
+          myRatingDebounceRef.current = null;
+        });
+      }, 300);
+    },
+    [supportsUserRating, currentUserId, id, myRating, refreshSummary]
+  );
 
   const persistUserList = useCallback(
     async ({ userId, animeId, bookmarked: nextBookmarked, status: nextStatus }: PersistPayload) => {
@@ -161,6 +304,66 @@ export default function AnimeDetailScreen() {
       return !error;
     },
     [hasUserListsTable]
+  );
+
+  const loadMyRating = useCallback(async (userId: string, animeId: string) => {
+    try {
+      const { data: row, error } = await supabase
+        .from('ratings')
+        .select('score_overall')
+        .eq('user_id', userId)
+        .eq('anime_id', animeId)
+        .maybeSingle();
+
+      if (error) {
+        const message = error.message || error.code || 'unknown';
+        if (message.includes('column') && message.includes('user_id')) {
+          if (DEV) console.log('[ratings] user: unsupported schema');
+          if (DEV) console.log('[ratings] user: found=false score=none');
+          return { rating: null, supported: false };
+        }
+        if (DEV) console.log(`[ratings] user: found=false score=none error=${message}`);
+        return { rating: null, supported: true };
+      }
+
+      const score = typeof row?.score_overall === 'number' ? row.score_overall : null;
+      if (DEV) console.log(`[ratings] user: found=${score !== null} score=${score ?? 'none'}`);
+      return { rating: score, supported: true };
+    } catch (err: any) {
+      if (DEV) {
+        const message = err?.message ?? 'unknown';
+        console.log(`[ratings] user: found=false score=none error=${message}`);
+      }
+      return { rating: null, supported: true };
+    }
+  }, []);
+
+  const refreshSummary = useCallback(
+    async (animeId: string) => {
+      try {
+        const { data: rows, error } = await supabase
+          .from('ratings')
+          .select('score_overall')
+          .eq('anime_id', animeId);
+        if (error) throw error;
+        const scores = (rows ?? [])
+          .map((item: any) => (typeof item?.score_overall === 'number' ? item.score_overall : null))
+          .filter((value): value is number => typeof value === 'number');
+        const count = scores.length;
+        const avg = count ? scores.reduce((sum, value) => sum + value, 0) / count : null;
+        if (DEV) {
+          const avgLabel = avg !== null ? avg.toFixed(1) : 'none';
+          console.log(`[ratings] summary: count=${count} avg=${avgLabel}`);
+        }
+        setRatingSummary({ avg, count });
+      } catch (err: any) {
+        if (DEV) {
+          const message = err?.message ?? 'unknown';
+          console.log(`[ratings] summary: count=0 avg=none error=${message}`);
+        }
+      }
+    },
+    []
   );
 
   const onSave = async () => {
@@ -312,7 +515,7 @@ export default function AnimeDetailScreen() {
 
   useEffect(() => {
     if (!DEV) return;
-    console.log('[anime] tags-ui:', { pills: displayTags.length, tags: displayTags });
+    console.log('[anime] tags-ui:', { pills: displayTags?.length ?? 0 });
   }, [displayTags]);
 
   const yearLabel = useMemo(() => {
@@ -328,7 +531,7 @@ export default function AnimeDetailScreen() {
     return items;
   }, [yearLabel, data?.episodes_count]);
 
-  const ratingAverage = useMemo(() => {
+  const ratingAverageFromData = useMemo(() => {
     if (!data) return null;
     const keys = ['average_rating', 'rating_average', 'avg_rating', 'score_average'] as const;
     const found = keys
@@ -340,7 +543,7 @@ export default function AnimeDetailScreen() {
     return typeof found === 'number' ? found : null;
   }, [data]);
 
-  const ratingCount = useMemo(() => {
+  const ratingCountFromData = useMemo(() => {
     if (!data) return null;
     const keys = ['ratings_count', 'rating_count', 'reviews_count'] as const;
     const found = keys
@@ -352,12 +555,23 @@ export default function AnimeDetailScreen() {
     return typeof found === 'number' ? found : null;
   }, [data]);
 
+  const [ratingSummary, setRatingSummary] = useState<{ avg: number | null; count: number | null }>({
+    avg: ratingAverageFromData,
+    count: ratingCountFromData,
+  });
+
+  useEffect(() => {
+    setRatingSummary({ avg: ratingAverageFromData, count: ratingCountFromData });
+  }, [ratingAverageFromData, ratingCountFromData]);
+
   const ratingLabel = useMemo(() => {
-    if (ratingAverage === null) return null;
-    const formatted = ratingAverage >= 0 ? ratingAverage.toFixed(1) : ratingAverage.toString();
-    if (ratingCount === null) return `⭐ ${formatted}`;
-    return `⭐ ${formatted} (${ratingCount})`;
-  }, [ratingAverage, ratingCount]);
+    const avg = ratingSummary.avg;
+    const count = ratingSummary.count;
+    if (avg === null || Number.isNaN(avg)) return null;
+    const formatted = avg >= 0 ? avg.toFixed(1) : avg.toString();
+    if (typeof count !== 'number') return `⭐ ${formatted}`;
+    return `⭐ ${formatted} (${count})`;
+  }, [ratingSummary]);
 
   const galleryItems = useMemo(() => {
     const uri = data?.thumbnail_url || null;
@@ -396,7 +610,11 @@ export default function AnimeDetailScreen() {
   const bookmarkIcon = bookmarked ? '★' : '☆';
   const statusButtonLabel = status ?? 'Status';
 
-  const statusControls = (
+  const statusControls = !authReady ? (
+    <View style={{ width: 100, height: 36, borderRadius: 18, backgroundColor: 'rgba(0,0,0,0.55)', alignItems: 'center', justifyContent: 'center', marginRight: 12 }}>
+      <ActivityIndicator size="small" color="#A78BFA" />
+    </View>
+  ) : (
     <View style={{ position: 'relative', marginRight: 12 }}>
       <Pressable
         onPress={onToggleStatusMenu}
@@ -483,17 +701,23 @@ export default function AnimeDetailScreen() {
               <View style={styles.heroBottomOverlay} />
               <View style={styles.heroTopBar}>
                 {statusControls}
-                <Pressable
-                  onPress={onToggleBookmark}
-                  hitSlop={HIT_SLOP}
-                  style={({ pressed }) => [
-                    styles.iconButton,
-                    bookmarked && styles.iconButtonActive,
-                    pressed && styles.iconButtonPressed,
-                  ]}
-                >
-                  <Text style={styles.iconButtonText}>{bookmarkIcon}</Text>
-                </Pressable>
+                {!authReady ? (
+                  <View style={[styles.iconButton, { alignItems: 'center', justifyContent: 'center' }]}>
+                    <ActivityIndicator size="small" color="#A78BFA" />
+                  </View>
+                ) : (
+                  <Pressable
+                    onPress={onToggleBookmark}
+                    hitSlop={HIT_SLOP}
+                    style={({ pressed }) => [
+                      styles.iconButton,
+                      bookmarked && styles.iconButtonActive,
+                      pressed && styles.iconButtonPressed,
+                    ]}
+                  >
+                    <Text style={styles.iconButtonText}>{bookmarkIcon}</Text>
+                  </Pressable>
+                )}
               </View>
               <View style={styles.heroBottom}>
                 <View style={styles.titleShield}>
@@ -533,17 +757,23 @@ export default function AnimeDetailScreen() {
               <View style={styles.heroBottomOverlay} />
               <View style={styles.heroTopBar}>
                 {statusControls}
-                <Pressable
-                  onPress={onToggleBookmark}
-                  hitSlop={HIT_SLOP}
-                  style={({ pressed }) => [
-                    styles.iconButton,
-                    bookmarked && styles.iconButtonActive,
-                    pressed && styles.iconButtonPressed,
-                  ]}
-                >
-                  <Text style={styles.iconButtonText}>{bookmarkIcon}</Text>
-                </Pressable>
+                {!authReady ? (
+                  <View style={[styles.iconButton, { alignItems: 'center', justifyContent: 'center' }]}>
+                    <ActivityIndicator size="small" color="#A78BFA" />
+                  </View>
+                ) : (
+                  <Pressable
+                    onPress={onToggleBookmark}
+                    hitSlop={HIT_SLOP}
+                    style={({ pressed }) => [
+                      styles.iconButton,
+                      bookmarked && styles.iconButtonActive,
+                      pressed && styles.iconButtonPressed,
+                    ]}
+                  >
+                    <Text style={styles.iconButtonText}>{bookmarkIcon}</Text>
+                  </Pressable>
+                )}
               </View>
               <View style={styles.heroBottom}>
                 <View style={styles.titleShield}>
@@ -575,6 +805,45 @@ export default function AnimeDetailScreen() {
                   ) : null}
                 </View>
               </View>
+            </View>
+          )}
+        </View>
+
+        <View style={styles.myRatingCard}>
+          <View style={styles.myRatingHeader}>
+            <Text style={styles.myRatingLabel}>My Rating</Text>
+            <View style={styles.myRatingValue}>
+              {savingMyRating ? (
+                <ActivityIndicator size="small" color="#A78BFA" />
+              ) : (
+                <Text style={styles.myRatingValueText}>{myRating ?? '–'}</Text>
+              )}
+            </View>
+          </View>
+          {(!authReady || myRatingLoading) ? (
+            <View style={styles.myRatingSpinner}>
+              <ActivityIndicator size="small" color="#A78BFA" />
+            </View>
+          ) : (
+            <View style={[styles.myRatingControls, savingMyRating && styles.myRatingDisabled]}>
+              {Array.from({ length: 10 }, (_, idx) => {
+                const value = idx + 1;
+                const selected = myRating === value;
+                return (
+                  <Pressable
+                    key={`my-rating-${value}`}
+                    onPress={() => onPickMyRating(value)}
+                    disabled={savingMyRating}
+                    style={({ pressed }) => [
+                      styles.myRatingChip,
+                      selected && styles.myRatingChipSelected,
+                      pressed && styles.myRatingChipPressed,
+                    ]}
+                  >
+                    <Text style={styles.myRatingChipText}>{value}</Text>
+                  </Pressable>
+                );
+              })}
             </View>
           )}
         </View>
@@ -785,6 +1054,29 @@ const styles = StyleSheet.create({
   },
   ratingChipText: { color: '#FACC15', fontSize: 13, fontWeight: '600' },
   heroFallback: { backgroundColor: 'rgba(255,255,255,0.05)' },
+  myRatingCard: { paddingHorizontal: 16, marginBottom: 24 },
+  myRatingHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
+  myRatingLabel: { color: '#fff', fontSize: 18, fontWeight: '700' },
+  myRatingValue: { minWidth: 32, alignItems: 'flex-end' },
+  myRatingValueText: { color: '#fff', fontSize: 16, fontWeight: '600' },
+  myRatingSpinner: { height: 32, justifyContent: 'center' },
+  myRatingControls: { flexDirection: 'row', flexWrap: 'wrap' },
+  myRatingChip: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.18)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 8,
+    marginBottom: 8,
+  },
+  myRatingChipSelected: { backgroundColor: '#A78BFA', borderColor: '#A78BFA' },
+  myRatingChipPressed: { opacity: 0.85 },
+  myRatingChipText: { color: '#fff', fontSize: 13, fontWeight: '700' },
+  myRatingDisabled: { opacity: 0.6 },
   section: { paddingHorizontal: 16, marginBottom: 28 },
   sectionHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
   sectionHeader: { color: '#fff', fontSize: 18, fontWeight: '700' },
