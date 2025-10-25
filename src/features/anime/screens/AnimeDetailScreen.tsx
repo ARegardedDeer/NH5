@@ -2,20 +2,22 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   ActivityIndicator,
   Alert,
+  Animated,
   Image,
   ImageBackground,
+  Modal,
+  PanResponder,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
+  TouchableOpacity,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRoute } from '@react-navigation/native';
 import { useAnimeById } from '../hooks/useAnimeById';
-import { useMyRating } from '../hooks/useMyRating';
 import { theme } from '../../../ui/theme';
-import { RatingPicker } from '../components/RatingPicker';
 import { supabase, whenAuthed } from '../../../db/supabaseClient';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
@@ -24,8 +26,17 @@ const DEV_VERBOSE = __DEV__ && false; // flip to true for deep debugging
 const HIT_SLOP = { top: 8, right: 8, bottom: 8, left: 8 };
 const STATUSES = ['Watching', 'On Hold', 'Completed', 'Dropped', 'Plan to Watch'] as const;
 
-// Cache key with version for safe invalidation (bump v1 -> v2 on schema changes)
+// Haptic feedback helper (best-effort)
+const haptic = (type: 'light' | 'medium' | 'heavy') => {
+  try {
+    (globalThis as any)?.ReactNativeHaptic?.impact?.(type);
+    if (DEV_VERBOSE) console.log('[ratings] haptic:', type);
+  } catch {}
+};
+
+// Cache keys with version for safe invalidation (bump v1 -> v2 on schema changes)
 const getUserListCacheKey = (animeId: string) => `nh5::user_list::${animeId}::v1`;
+const getUserRatingCacheKey = (animeId: string) => `nh5::user_rating::${animeId}::v1`;
 
 type StatusOption = (typeof STATUSES)[number];
 
@@ -55,14 +66,7 @@ export default function AnimeDetailScreen() {
   const { id, title } = (route.params || {}) as RouteParams;
 
   const { data, isLoading, error } = useAnimeById(id);
-  const { ratingQuery, upsert, upsertStatus } = useMyRating(id);
 
-  // local form state (mutually exclusive)
-  const initialScore = ratingQuery.data?.score_overall ?? null;
-  const initialEleven = !!ratingQuery.data?.is_eleven_out_of_ten;
-
-  const [score, setScore] = useState<number | null>(initialScore);
-  const [isEleven, setIsEleven] = useState<boolean>(initialEleven);
   const [bookmarked, setBookmarked] = useState(false);
   const [status, setStatus] = useState<StatusOption | null>(null);
   const [statusMenuOpen, setStatusMenuOpen] = useState(false);
@@ -74,27 +78,14 @@ export default function AnimeDetailScreen() {
   const [myRating, setMyRating] = useState<number | null>(null);
   const [myRatingLoading, setMyRatingLoading] = useState(false);
   const [savingMyRating, setSavingMyRating] = useState(false);
+  const [ratingUIOpen, setRatingUIOpen] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
+  const [toast, setToast] = useState({ visible: false, message: '' });
+  const [railWidth, setRailWidth] = useState(0);
+
   const myRatingPrevRef = useRef<number | null>(null);
-  const myRatingDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const isMountedRef = useRef(true);
-  const [supportsUserRating, setSupportsUserRating] = useState(true);
-  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
-
-  useEffect(() => {
-    setScore(initialScore);
-    setIsEleven(initialEleven);
-  }, [initialScore, initialEleven]);
-
-  useEffect(
-    () => () => {
-      isMountedRef.current = false;
-      if (myRatingDebounceRef.current) {
-        clearTimeout(myRatingDebounceRef.current);
-        myRatingDebounceRef.current = null;
-      }
-    },
-    []
-  );
+  const lastHapticValue = useRef<number>(0);
+  const thumbAnim = useRef(new Animated.Value(28)).current;
 
   useEffect(() => {
     setIsStoryExpanded(false);
@@ -206,19 +197,6 @@ export default function AnimeDetailScreen() {
   }, [id, refreshSummary]);
 
   // keep exclusivity in UI
-  const onPickScore = (n: number) => {
-    setIsEleven(false);
-    setScore(n);
-  };
-  const onToggleEleven = () => {
-    setIsEleven((prev) => {
-      const next = !prev;
-      if (next) setScore(null);
-      return next;
-    });
-  };
-
-  const canSave = useMemo(() => isEleven || (score !== null && score >= 1 && score <= 10), [isEleven, score]);
 
   const onPickMyRating = useCallback(
     (value: number) => {
@@ -366,48 +344,6 @@ export default function AnimeDetailScreen() {
     []
   );
 
-  const onSave = async () => {
-    if (!canSave) {
-      Alert.alert('Pick a rating', 'Choose 1–10 or 11/10.');
-      return;
-    }
-    const payload = {
-      score_overall: isEleven ? null : score,
-      is_eleven_out_of_ten: isEleven,
-    } as { score_overall: number | null; is_eleven_out_of_ten: boolean };
-
-    try {
-      const { error: e } = await upsert(payload);
-      if (e) {
-        console.error('[AnimeDetail] save error', e);
-        Alert.alert('Error', e.message || e.details || 'Failed to save rating');
-        return;
-      }
-      Alert.alert('Saved', isEleven ? 'Marked as 11/10' : `Saved ${score}/10`);
-    } catch (err: any) {
-      console.error('[AnimeDetail] save exception', err);
-      Alert.alert('Error', err?.message || 'Failed to save rating');
-    }
-  };
-
-  const onSetEleven = async () => {
-    try {
-      const userId = await getCurrentUserId();
-      if (!userId) {
-        Alert.alert('Error', 'Could not determine user ID');
-        return;
-      }
-      const { error } = await supabase
-        .from('user_eleven')
-        .upsert({ user_id: userId, anime_id: id }, { onConflict: 'user_id' });
-      if (error) throw error;
-      console.log('[profile] setEleven ok', { userId, animeId: id });
-      Alert.alert('Saved', 'This is now your 11/10 highlight!');
-    } catch (e: any) {
-      console.warn('[profile] setEleven error', e);
-      Alert.alert('Error', 'Could not set 11/10.');
-    }
-  };
 
   const onToggleBookmark = useCallback(async () => {
     const next = !bookmarked;
@@ -569,8 +505,9 @@ export default function AnimeDetailScreen() {
     const count = ratingSummary.count;
     if (avg === null || Number.isNaN(avg)) return null;
     const formatted = avg >= 0 ? avg.toFixed(1) : avg.toString();
-    if (typeof count !== 'number') return `⭐ ${formatted}`;
-    return `⭐ ${formatted} (${count})`;
+    if (typeof count !== 'number' || count === 0) return `⭐ ${formatted}`;
+    const ratingWord = count === 1 ? 'rating' : 'ratings';
+    return `⭐ ${formatted} · ${count} ${ratingWord}`;
   }, [ratingSummary]);
 
   const galleryItems = useMemo(() => {
@@ -809,14 +746,21 @@ export default function AnimeDetailScreen() {
           )}
         </View>
 
-        <View style={styles.myRatingCard}>
+        <TouchableOpacity
+          style={styles.myRatingCard}
+          onPress={() => setRatingUIOpen(true)}
+          disabled={!authReady || myRatingLoading || savingMyRating}
+          activeOpacity={0.7}
+        >
           <View style={styles.myRatingHeader}>
             <Text style={styles.myRatingLabel}>My Rating</Text>
             <View style={styles.myRatingValue}>
               {savingMyRating ? (
                 <ActivityIndicator size="small" color="#A78BFA" />
               ) : (
-                <Text style={styles.myRatingValueText}>{myRating ?? '–'}</Text>
+                <Text style={styles.myRatingValueText}>
+                  {myRating !== null ? myRating.toFixed(1) : '–'}
+                </Text>
               )}
             </View>
           </View>
@@ -825,28 +769,9 @@ export default function AnimeDetailScreen() {
               <ActivityIndicator size="small" color="#A78BFA" />
             </View>
           ) : (
-            <View style={[styles.myRatingControls, savingMyRating && styles.myRatingDisabled]}>
-              {Array.from({ length: 10 }, (_, idx) => {
-                const value = idx + 1;
-                const selected = myRating === value;
-                return (
-                  <Pressable
-                    key={`my-rating-${value}`}
-                    onPress={() => onPickMyRating(value)}
-                    disabled={savingMyRating}
-                    style={({ pressed }) => [
-                      styles.myRatingChip,
-                      selected && styles.myRatingChipSelected,
-                      pressed && styles.myRatingChipPressed,
-                    ]}
-                  >
-                    <Text style={styles.myRatingChipText}>{value}</Text>
-                  </Pressable>
-                );
-              })}
-            </View>
+            <Text style={styles.myRatingHint}>Tap to rate (1.0 - 10.0)</Text>
           )}
-        </View>
+        </TouchableOpacity>
 
         <View style={styles.section}>
           <View style={styles.sectionHeaderRow}>
@@ -927,29 +852,126 @@ export default function AnimeDetailScreen() {
           </View>
         ) : null}
 
-        <View style={styles.ratingSection}>
-          <View style={styles.ratingHeader}>
-            <Text style={styles.sectionHeader}>Your Rating</Text>
-            <Pressable
-              onPress={onSetEleven}
-              hitSlop={HIT_SLOP}
-              style={({ pressed }) => [styles.highlightButton, pressed && styles.highlightButtonPressed]}
-            >
-              <Text style={styles.highlightButtonText}>Set as 11/10</Text>
-            </Pressable>
-          </View>
-          <RatingPicker
-            score={score}
-            eleven={isEleven}
-            onPickScore={onPickScore}
-            onToggleEleven={onToggleEleven}
-            onSave={onSave}
-            saving={ratingQuery.isFetching || upsertStatus.isPending}
-          />
-        </View>
 
         <View style={styles.bottomSpacer} />
       </ScrollView>
+
+      {/* Rating Slider Modal */}
+      <Modal
+        visible={ratingUIOpen}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setRatingUIOpen(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalSheet}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Rate this anime</Text>
+              <TouchableOpacity onPress={() => setRatingUIOpen(false)}>
+                <Text style={styles.modalClose}>✕</Text>
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.sliderContainer}>
+              <Text style={styles.sliderValue}>
+                {myRating !== null ? myRating.toFixed(1) : '–'}
+              </Text>
+
+              <View
+                style={styles.sliderRail}
+                onLayout={(e) => setRailWidth(e.nativeEvent.layout.width)}
+              >
+                {/* Gradient fill */}
+                <View
+                  style={[
+                    styles.sliderFill,
+                    {
+                      width: myRating !== null && railWidth > 0
+                        ? `${((myRating - 1) / 9) * 100}%`
+                        : '0%',
+                    },
+                  ]}
+                />
+
+                {/* Touch zones (10 invisible pressable zones) */}
+                <View style={styles.sliderTouchZones}>
+                  {Array.from({ length: 91 }, (_, idx) => {
+                    const value = 1.0 + idx * 0.1;
+                    return (
+                      <Pressable
+                        key={`zone-${idx}`}
+                        style={styles.sliderTouchZone}
+                        onPress={() => {
+                          const rounded = Math.round(value * 10) / 10;
+                          setMyRating(rounded);
+                          // Haptic every 0.5
+                          const halfStep = Math.round(rounded * 2);
+                          if (halfStep !== lastHapticValue.current) {
+                            haptic('light');
+                            lastHapticValue.current = halfStep;
+                          }
+                        }}
+                      />
+                    );
+                  })}
+                </View>
+
+                {/* Animated thumb */}
+                {myRating !== null && railWidth > 0 ? (
+                  <Animated.View
+                    style={[
+                      styles.sliderThumb,
+                      {
+                        left: ((myRating - 1) / 9) * railWidth - 12,
+                        transform: [{ scale: isDragging ? 1.2 : 1 }],
+                      },
+                    ]}
+                  />
+                ) : null}
+              </View>
+
+              <View style={styles.sliderLabels}>
+                <Text style={styles.sliderLabelText}>1.0</Text>
+                <Text style={styles.sliderLabelText}>10.0</Text>
+              </View>
+            </View>
+
+            <View style={styles.modalActions}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.modalButtonSecondary]}
+                onPress={() => {
+                  setMyRating(null);
+                  setRatingUIOpen(false);
+                  // Optionally clear from DB here
+                }}
+              >
+                <Text style={styles.modalButtonTextSecondary}>Clear</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.modalButtonPrimary]}
+                onPress={() => {
+                  if (myRating !== null) {
+                    onPickMyRating(myRating);
+                  }
+                  setRatingUIOpen(false);
+                }}
+                disabled={myRating === null}
+              >
+                <Text style={styles.modalButtonTextPrimary}>
+                  {myRating !== null ? 'Save' : 'Pick a rating'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Toast */}
+      {toast.visible ? (
+        <View style={styles.toast}>
+          <Text style={styles.toastText}>{toast.message}</Text>
+        </View>
+      ) : null}
     </SafeAreaView>
   );
 }
@@ -1128,4 +1150,156 @@ const styles = StyleSheet.create({
   highlightButtonPressed: { opacity: 0.9 },
   highlightButtonText: { color: '#0B0A16', fontWeight: '600', fontSize: 13 },
   bottomSpacer: { height: 32 },
+
+  // New rating hint
+  myRatingHint: {
+    color: '#A1A1AA',
+    fontSize: 13,
+    textAlign: 'center',
+    marginTop: 8,
+  },
+
+  // Modal styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    justifyContent: 'flex-end',
+  },
+  modalSheet: {
+    backgroundColor: '#1A1825',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingHorizontal: 20,
+    paddingTop: 20,
+    paddingBottom: 40,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  modalTitle: {
+    color: '#FFFFFF',
+    fontSize: 20,
+    fontWeight: '700',
+  },
+  modalClose: {
+    color: '#A1A1AA',
+    fontSize: 24,
+    fontWeight: '300',
+  },
+
+  // Slider styles
+  sliderContainer: {
+    marginBottom: 32,
+  },
+  sliderValue: {
+    color: '#A78BFA',
+    fontSize: 48,
+    fontWeight: '700',
+    textAlign: 'center',
+    marginBottom: 32,
+  },
+  sliderRail: {
+    height: 8,
+    backgroundColor: 'rgba(167, 139, 250, 0.15)',
+    borderRadius: 4,
+    position: 'relative',
+    marginHorizontal: 12,
+  },
+  sliderFill: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    bottom: 0,
+    backgroundColor: '#A78BFA',
+    borderRadius: 4,
+  },
+  sliderTouchZones: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: -12,
+    bottom: -12,
+    flexDirection: 'row',
+  },
+  sliderTouchZone: {
+    flex: 1,
+  },
+  sliderThumb: {
+    position: 'absolute',
+    top: -8,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: '#FFFFFF',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  sliderLabels: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 12,
+    marginHorizontal: 12,
+  },
+  sliderLabelText: {
+    color: '#71717A',
+    fontSize: 12,
+    fontWeight: '500',
+  },
+
+  // Modal buttons
+  modalActions: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  modalButton: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  modalButtonPrimary: {
+    backgroundColor: '#A78BFA',
+  },
+  modalButtonSecondary: {
+    backgroundColor: 'rgba(167, 139, 250, 0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(167, 139, 250, 0.3)',
+  },
+  modalButtonTextPrimary: {
+    color: '#0B0A16',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  modalButtonTextSecondary: {
+    color: '#A78BFA',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+
+  // Toast
+  toast: {
+    position: 'absolute',
+    bottom: 80,
+    left: 20,
+    right: 20,
+    backgroundColor: '#27243A',
+    borderRadius: 12,
+    padding: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  toastText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    textAlign: 'center',
+  },
 });
