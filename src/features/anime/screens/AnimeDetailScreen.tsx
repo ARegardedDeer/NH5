@@ -82,6 +82,7 @@ export default function AnimeDetailScreen() {
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [ratingUIOpen, setRatingUIOpen] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
+  const [dragValue, setDragValue] = useState<number | null>(null);
   const [toast, setToast] = useState({ visible: false, message: '' });
   const [railWidth, setRailWidth] = useState(0);
 
@@ -89,7 +90,7 @@ export default function AnimeDetailScreen() {
   const myRatingDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isMountedRef = useRef(true);
   const lastHapticValue = useRef<number>(0);
-  const dragStartX = useRef(0);
+  const railOffsetX = useRef(0);
 
   // Value <-> X position mapping helpers
   const valueToX = useCallback((value: number) => {
@@ -107,34 +108,28 @@ export default function AnimeDetailScreen() {
     return Math.round(value * 10) / 10; // round to 0.1 precision
   }, [railWidth]);
 
-  // Sync thumb position when myRating or railWidth changes
-  useEffect(() => {
-    if (!railWidth) return;
-    const seed = myRating === 11 ? 10 : (myRating ?? 5);
-    // No animation needed, just position sync
-  }, [railWidth, myRating]);
-
-  // PanResponder for draggable slider
+  // PanResponder for draggable slider (works on simulator & device)
   const panResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
       onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dx) > Math.abs(g.dy),
-      onPanResponderGrant: () => {
+      onPanResponderGrant: (evt) => {
         setIsDragging(true);
-        // Store starting X position
-        const currentValue = myRating === 11 ? 10 : (myRating ?? 5);
-        dragStartX.current = valueToX(currentValue);
+        // Use pageX (absolute screen coord) - railOffsetX (rail's left edge) = position within rail
+        const touchX = evt.nativeEvent.pageX - railOffsetX.current;
+        const rawValue = xToValue(touchX);
+        setDragValue(rawValue);
       },
-      onPanResponderMove: async (_, gestureState) => {
+      onPanResponderMove: async (evt) => {
         if (railWidth === 0) return;
 
-        // Calculate new X from drag delta
-        const nextX = dragStartX.current + gestureState.dx;
-        const newValue = xToValue(nextX);
-        const clamped = Math.max(1.0, Math.min(10.0, newValue));
+        // Calculate position relative to rail
+        const touchX = evt.nativeEvent.pageX - railOffsetX.current;
+        const rawValue = xToValue(touchX);
+        setDragValue(rawValue);
 
         // If user was at 11/10 and drags slider, clear the 11/10 flag (once)
-        if (myRating === 11 && gestureState.dx !== 0) {
+        if (myRating === 11 && isDragging) {
           try {
             const userId = await getCurrentUserId();
             if (userId) {
@@ -146,19 +141,25 @@ export default function AnimeDetailScreen() {
           }
         }
 
-        setMyRating(clamped);
-
         // Haptic every 0.5
-        const halfStep = Math.round(clamped * 2);
+        const halfStep = Math.round(rawValue * 2);
         if (halfStep !== lastHapticValue.current) {
           haptic('light');
           lastHapticValue.current = halfStep;
         }
       },
-      onPanResponderRelease: () => {
+      onPanResponderRelease: async () => {
+        // Snap to 0.1 on release
+        if (dragValue !== null) {
+          const snapped = Math.round(dragValue * 10) / 10;
+          const clamped = Math.max(1.0, Math.min(10.0, snapped));
+          setMyRating(clamped);
+        }
+        setDragValue(null);
         setIsDragging(false);
       },
       onPanResponderTerminate: () => {
+        setDragValue(null);
         setIsDragging(false);
       },
     })
@@ -1020,74 +1021,52 @@ export default function AnimeDetailScreen() {
 
             <View style={styles.sliderContainer}>
               <Text style={styles.sliderValue}>
-                {myRating === 11 ? '11/10' : myRating !== null ? myRating.toFixed(1) : '–'}
+                {isDragging
+                  ? (dragValue !== null ? dragValue.toFixed(1) : '–')
+                  : (myRating === 11 ? '11/10' : myRating !== null ? myRating.toFixed(1) : '–')
+                }
               </Text>
 
               <View
                 style={styles.sliderRail}
-                onLayout={(e) => setRailWidth(e.nativeEvent.layout.width)}
+                onLayout={(e) => {
+                  setRailWidth(e.nativeEvent.layout.width);
+                  e.nativeEvent.target.measure((x, y, width, height, pageX, pageY) => {
+                    railOffsetX.current = pageX;
+                  });
+                }}
+                {...panResponder.panHandlers}
               >
-                {/* Gradient fill */}
+                {/* Gradient fill - tracks dragValue during drag for smooth feedback */}
                 <View
                   style={[
                     styles.sliderFill,
                     {
-                      width: myRating !== null && railWidth > 0
-                        ? myRating === 11
-                          ? '100%'
-                          : `${((myRating - 1) / 9) * 100}%`
+                      width: railWidth > 0
+                        ? (() => {
+                            const displayValue = isDragging ? (dragValue ?? 5) : (myRating ?? 5);
+                            if (displayValue === 11 || (myRating === 11 && !isDragging)) {
+                              return '100%';
+                            }
+                            const clamped = Math.max(1, Math.min(10, displayValue));
+                            return `${((clamped - 1) / 9) * 100}%`;
+                          })()
                         : '0%',
                     },
                   ]}
                 />
 
-                {/* Touch zones (91 invisible pressable zones for 0.1 increments) */}
-                <View style={styles.sliderTouchZones}>
-                  {Array.from({ length: 91 }, (_, idx) => {
-                    const value = 1.0 + idx * 0.1;
-                    return (
-                      <Pressable
-                        key={`zone-${idx}`}
-                        style={styles.sliderTouchZone}
-                        onPress={async () => {
-                          const rounded = Math.round(value * 10) / 10;
-
-                          // If user was at 11/10 and taps slider, clear the 11/10 flag
-                          if (myRating === 11) {
-                            try {
-                              const userId = await getCurrentUserId();
-                              if (userId) {
-                                await supabase.from('user_eleven').delete().eq('user_id', userId).eq('anime_id', id);
-                                if (DEV) console.log('[ratings] tap: cleared 11/10 flag');
-                              }
-                            } catch (e: any) {
-                              if (DEV) console.warn('[ratings] tap: failed to clear 11/10', e?.message ?? e);
-                            }
-                          }
-
-                          setMyRating(rounded);
-                          // Haptic every 0.5
-                          const halfStep = Math.round(rounded * 2);
-                          if (halfStep !== lastHapticValue.current) {
-                            haptic('light');
-                            lastHapticValue.current = halfStep;
-                          }
-                        }}
-                      />
-                    );
-                  })}
-                </View>
-
-                {/* Animated thumb with drag support */}
-                {myRating !== null && railWidth > 0 ? (
+                {/* Thumb - visual only, no handlers (rail handles interaction) */}
+                {(isDragging || myRating !== null) && railWidth > 0 ? (
                   <Animated.View
-                    {...panResponder.panHandlers}
                     style={[
                       styles.sliderThumb,
                       {
-                        left: myRating === 11
-                          ? railWidth - 12
-                          : ((myRating - 1) / 9) * railWidth - 12,
+                        left: (() => {
+                          const displayValue = isDragging ? (dragValue ?? 5) : (myRating === 11 ? 10 : myRating ?? 5);
+                          const clamped = Math.max(1, Math.min(10, displayValue));
+                          return ((clamped - 1) / 9) * railWidth - 12;
+                        })(),
                         transform: [{ scale: isDragging ? 1.2 : 1 }],
                       },
                     ]}
