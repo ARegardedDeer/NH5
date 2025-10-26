@@ -91,6 +91,53 @@ export default function AnimeDetailScreen() {
   const lastHapticValue = useRef<number>(0);
   const thumbAnim = useRef(new Animated.Value(28)).current;
 
+  // PanResponder for draggable slider
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: () => true,
+      onPanResponderGrant: () => {
+        setIsDragging(true);
+      },
+      onPanResponderMove: (_, gestureState) => {
+        if (railWidth === 0) return;
+
+        // Calculate new value from gesture position
+        const clampedX = Math.max(0, Math.min(railWidth, gestureState.moveX - gestureState.x0 + ((myRating ?? 5) - 1) / 9 * railWidth));
+        const newValue = 1 + (clampedX / railWidth) * 9;
+        const rounded = Math.round(newValue * 10) / 10;
+        const clamped = Math.max(1.0, Math.min(10.0, rounded));
+
+        setMyRating(clamped);
+
+        // If user was at 11/10 and drags slider, clear the 11/10 flag
+        if (myRating === 11) {
+          (async () => {
+            try {
+              const userId = await getCurrentUserId();
+              if (userId) {
+                await supabase.from('user_eleven').delete().eq('user_id', userId).eq('anime_id', id);
+                if (DEV) console.log('[ratings] drag: cleared 11/10 flag');
+              }
+            } catch (e: any) {
+              if (DEV) console.warn('[ratings] drag: failed to clear 11/10', e?.message ?? e);
+            }
+          })();
+        }
+
+        // Haptic every 0.5
+        const halfStep = Math.round(clamped * 2);
+        if (halfStep !== lastHapticValue.current) {
+          haptic('light');
+          lastHapticValue.current = halfStep;
+        }
+      },
+      onPanResponderRelease: () => {
+        setIsDragging(false);
+      },
+    })
+  ).current;
+
   useEffect(() => {
     setIsStoryExpanded(false);
   }, [data?.synopsis]);
@@ -367,14 +414,44 @@ export default function AnimeDetailScreen() {
         Alert.alert('Error', 'Could not determine user ID');
         return;
       }
-      const { error } = await supabase
+
+      // Optimistic update
+      myRatingPrevRef.current = myRating;
+      setMyRating(11);
+      setRatingUIOpen(false);
+
+      // Write to both ratings (score=11) and user_eleven tables
+      const { error: ratingError } = await supabase
+        .from('ratings')
+        .upsert(
+          { user_id: userId, anime_id: id, score_overall: 11 },
+          { onConflict: 'user_id,anime_id' }
+        );
+
+      if (ratingError) {
+        const message = ratingError.message || ratingError.code || 'unknown';
+        if (message.includes('column') && message.includes('user_id')) {
+          if (DEV) console.log('[ratings] 11/10: persisted=false reason=schema score=11');
+          setSupportsUserRating(false);
+        } else {
+          throw ratingError;
+        }
+      } else {
+        if (DEV) console.log('[ratings] 11/10: persisted=true score=11');
+      }
+
+      const { error: elevenError } = await supabase
         .from('user_eleven')
         .upsert({ user_id: userId, anime_id: id }, { onConflict: 'user_id' });
-      if (error) throw error;
+
+      if (elevenError) throw elevenError;
+
       console.log('[profile] setEleven ok', { userId, animeId: id });
-      setRatingUIOpen(false);
+      await refreshSummary(id);
       Alert.alert('Saved', 'This is now your 11/10 highlight!');
     } catch (e: any) {
+      // Rollback on error
+      setMyRating(myRatingPrevRef.current);
       console.warn('[profile] setEleven error', e);
       Alert.alert('Error', 'Could not set 11/10.');
     }
@@ -794,7 +871,7 @@ export default function AnimeDetailScreen() {
                 <ActivityIndicator size="small" color="#A78BFA" />
               ) : (
                 <Text style={styles.myRatingValueText}>
-                  {myRating !== null ? myRating.toFixed(1) : '–'}
+                  {myRating === 11 ? '11/10' : myRating !== null ? myRating.toFixed(1) : '–'}
                 </Text>
               )}
             </View>
@@ -916,7 +993,7 @@ export default function AnimeDetailScreen() {
 
             <View style={styles.sliderContainer}>
               <Text style={styles.sliderValue}>
-                {myRating !== null ? myRating.toFixed(1) : '–'}
+                {myRating === 11 ? '11/10' : myRating !== null ? myRating.toFixed(1) : '–'}
               </Text>
 
               <View
@@ -929,13 +1006,15 @@ export default function AnimeDetailScreen() {
                     styles.sliderFill,
                     {
                       width: myRating !== null && railWidth > 0
-                        ? `${((myRating - 1) / 9) * 100}%`
+                        ? myRating === 11
+                          ? '100%'
+                          : `${((myRating - 1) / 9) * 100}%`
                         : '0%',
                     },
                   ]}
                 />
 
-                {/* Touch zones (10 invisible pressable zones) */}
+                {/* Touch zones (91 invisible pressable zones for 0.1 increments) */}
                 <View style={styles.sliderTouchZones}>
                   {Array.from({ length: 91 }, (_, idx) => {
                     const value = 1.0 + idx * 0.1;
@@ -943,8 +1022,22 @@ export default function AnimeDetailScreen() {
                       <Pressable
                         key={`zone-${idx}`}
                         style={styles.sliderTouchZone}
-                        onPress={() => {
+                        onPress={async () => {
                           const rounded = Math.round(value * 10) / 10;
+
+                          // If user was at 11/10 and taps slider, clear the 11/10 flag
+                          if (myRating === 11) {
+                            try {
+                              const userId = await getCurrentUserId();
+                              if (userId) {
+                                await supabase.from('user_eleven').delete().eq('user_id', userId).eq('anime_id', id);
+                                if (DEV) console.log('[ratings] tap: cleared 11/10 flag');
+                              }
+                            } catch (e: any) {
+                              if (DEV) console.warn('[ratings] tap: failed to clear 11/10', e?.message ?? e);
+                            }
+                          }
+
                           setMyRating(rounded);
                           // Haptic every 0.5
                           const halfStep = Math.round(rounded * 2);
@@ -958,13 +1051,16 @@ export default function AnimeDetailScreen() {
                   })}
                 </View>
 
-                {/* Animated thumb */}
+                {/* Animated thumb with drag support */}
                 {myRating !== null && railWidth > 0 ? (
                   <Animated.View
+                    {...panResponder.panHandlers}
                     style={[
                       styles.sliderThumb,
                       {
-                        left: ((myRating - 1) / 9) * railWidth - 12,
+                        left: myRating === 11
+                          ? railWidth - 12
+                          : ((myRating - 1) / 9) * railWidth - 12,
                         transform: [{ scale: isDragging ? 1.2 : 1 }],
                       },
                     ]}
