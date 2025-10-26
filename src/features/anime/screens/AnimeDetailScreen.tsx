@@ -1048,56 +1048,61 @@ export default function AnimeDetailScreen() {
                 }
               </Text>
 
+              {/* Wrapper with large touch area */}
               <View
-                ref={railRef}
-                style={styles.sliderRail}
-                onLayout={(e) => {
-                  const { width, x } = e.nativeEvent.layout;
-                  setRailWidth(width);
-                  // Measure absolute position on screen
-                  if (railRef.current) {
-                    railRef.current.measure((fx, fy, w, h, px, py) => {
-                      railOffsetX.current = px;
-                    });
-                  }
-                }}
+                style={styles.sliderWrapper}
                 {...panResponder.panHandlers}
               >
-                {/* Gradient fill - tracks dragValue during drag for smooth feedback */}
                 <View
-                  style={[
-                    styles.sliderFill,
-                    {
-                      width: railWidth > 0
-                        ? (() => {
-                            const displayValue = isDragging ? (dragValue ?? 5) : (myRating ?? 5);
-                            if (displayValue === 11 || (myRating === 11 && !isDragging)) {
-                              return '100%';
-                            }
-                            const clamped = Math.max(1, Math.min(10, displayValue));
-                            return `${((clamped - 1) / 9) * 100}%`;
-                          })()
-                        : '0%',
-                    },
-                  ]}
-                />
-
-                {/* Thumb - visual only, no handlers (rail handles interaction) */}
-                {(isDragging || myRating !== null) && railWidth > 0 ? (
-                  <Animated.View
+                  ref={railRef}
+                  style={styles.sliderRail}
+                  onLayout={(e) => {
+                    const { width, x } = e.nativeEvent.layout;
+                    setRailWidth(width);
+                    // Measure absolute position on screen
+                    if (railRef.current) {
+                      railRef.current.measure((fx, fy, w, h, px, py) => {
+                        railOffsetX.current = px;
+                      });
+                    }
+                  }}
+                >
+                  {/* Gradient fill - tracks dragValue during drag for smooth feedback */}
+                  <View
                     style={[
-                      styles.sliderThumb,
+                      styles.sliderFill,
                       {
-                        left: (() => {
-                          const displayValue = isDragging ? (dragValue ?? 5) : (myRating === 11 ? 10 : myRating ?? 5);
-                          const clamped = Math.max(1, Math.min(10, displayValue));
-                          return ((clamped - 1) / 9) * railWidth - 12;
-                        })(),
-                        transform: [{ scale: isDragging ? 1.2 : 1 }],
+                        width: railWidth > 0
+                          ? (() => {
+                              const displayValue = isDragging ? (dragValue ?? 5) : (myRating ?? 5);
+                              if (displayValue === 11 || (myRating === 11 && !isDragging)) {
+                                return '100%';
+                              }
+                              const clamped = Math.max(1, Math.min(10, displayValue));
+                              return `${((clamped - 1) / 9) * 100}%`;
+                            })()
+                          : '0%',
                       },
                     ]}
                   />
-                ) : null}
+
+                  {/* Thumb - visual only, no handlers (wrapper handles interaction) */}
+                  {(isDragging || myRating !== null) && railWidth > 0 ? (
+                    <Animated.View
+                      style={[
+                        styles.sliderThumb,
+                        {
+                          left: (() => {
+                            const displayValue = isDragging ? (dragValue ?? 5) : (myRating === 11 ? 10 : myRating ?? 5);
+                            const clamped = Math.max(1, Math.min(10, displayValue));
+                            return ((clamped - 1) / 9) * railWidth - 12;
+                          })(),
+                          transform: [{ scale: isDragging ? 1.2 : 1 }],
+                        },
+                      ]}
+                    />
+                  ) : null}
+                </View>
               </View>
 
               <View style={styles.sliderLabels}>
@@ -1388,12 +1393,16 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginBottom: 32,
   },
+  sliderWrapper: {
+    paddingVertical: 20,
+    paddingHorizontal: 12,
+    marginHorizontal: -12,
+  },
   sliderRail: {
     height: 8,
     backgroundColor: 'rgba(167, 139, 250, 0.15)',
     borderRadius: 4,
     position: 'relative',
-    marginHorizontal: 12,
   },
   sliderFill: {
     position: 'absolute',
