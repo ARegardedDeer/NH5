@@ -89,41 +89,64 @@ export default function AnimeDetailScreen() {
   const myRatingDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isMountedRef = useRef(true);
   const lastHapticValue = useRef<number>(0);
-  const thumbAnim = useRef(new Animated.Value(28)).current;
+  const dragStartX = useRef(0);
+
+  // Value <-> X position mapping helpers
+  const valueToX = useCallback((value: number) => {
+    if (!railWidth) return 0;
+    const clamped = Math.max(1, Math.min(10, value));
+    const pct = (clamped - 1) / 9; // 1..10 -> 0..1
+    return pct * railWidth;
+  }, [railWidth]);
+
+  const xToValue = useCallback((x: number) => {
+    if (!railWidth) return 5;
+    const clampedX = Math.max(0, Math.min(railWidth, x));
+    const pct = clampedX / railWidth;
+    const value = 1 + (pct * 9); // 0..1 -> 1..10
+    return Math.round(value * 10) / 10; // round to 0.1 precision
+  }, [railWidth]);
+
+  // Sync thumb position when myRating or railWidth changes
+  useEffect(() => {
+    if (!railWidth) return;
+    const seed = myRating === 11 ? 10 : (myRating ?? 5);
+    // No animation needed, just position sync
+  }, [railWidth, myRating]);
 
   // PanResponder for draggable slider
   const panResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dx) > Math.abs(g.dy),
       onPanResponderGrant: () => {
         setIsDragging(true);
+        // Store starting X position
+        const currentValue = myRating === 11 ? 10 : (myRating ?? 5);
+        dragStartX.current = valueToX(currentValue);
       },
-      onPanResponderMove: (_, gestureState) => {
+      onPanResponderMove: async (_, gestureState) => {
         if (railWidth === 0) return;
 
-        // Calculate new value from gesture position
-        const clampedX = Math.max(0, Math.min(railWidth, gestureState.moveX - gestureState.x0 + ((myRating ?? 5) - 1) / 9 * railWidth));
-        const newValue = 1 + (clampedX / railWidth) * 9;
-        const rounded = Math.round(newValue * 10) / 10;
-        const clamped = Math.max(1.0, Math.min(10.0, rounded));
+        // Calculate new X from drag delta
+        const nextX = dragStartX.current + gestureState.dx;
+        const newValue = xToValue(nextX);
+        const clamped = Math.max(1.0, Math.min(10.0, newValue));
+
+        // If user was at 11/10 and drags slider, clear the 11/10 flag (once)
+        if (myRating === 11 && gestureState.dx !== 0) {
+          try {
+            const userId = await getCurrentUserId();
+            if (userId) {
+              await supabase.from('user_eleven').delete().eq('user_id', userId).eq('anime_id', id);
+              if (DEV) console.log('[ratings] drag: cleared 11/10 flag');
+            }
+          } catch (e: any) {
+            if (DEV) console.warn('[ratings] drag: failed to clear 11/10', e?.message ?? e);
+          }
+        }
 
         setMyRating(clamped);
-
-        // If user was at 11/10 and drags slider, clear the 11/10 flag
-        if (myRating === 11) {
-          (async () => {
-            try {
-              const userId = await getCurrentUserId();
-              if (userId) {
-                await supabase.from('user_eleven').delete().eq('user_id', userId).eq('anime_id', id);
-                if (DEV) console.log('[ratings] drag: cleared 11/10 flag');
-              }
-            } catch (e: any) {
-              if (DEV) console.warn('[ratings] drag: failed to clear 11/10', e?.message ?? e);
-            }
-          })();
-        }
 
         // Haptic every 0.5
         const halfStep = Math.round(clamped * 2);
@@ -133,6 +156,9 @@ export default function AnimeDetailScreen() {
         }
       },
       onPanResponderRelease: () => {
+        setIsDragging(false);
+      },
+      onPanResponderTerminate: () => {
         setIsDragging(false);
       },
     })
@@ -741,6 +767,7 @@ export default function AnimeDetailScreen() {
         style={styles.scroll}
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
+        scrollEnabled={!isDragging}
       >
         <View style={styles.hero}>
           {heroSource ? (
