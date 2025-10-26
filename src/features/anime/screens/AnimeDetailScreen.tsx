@@ -691,7 +691,6 @@ export default function AnimeDetailScreen() {
         style={styles.scroll}
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
-        scrollEnabled={!isDragging}
       >
         <View style={styles.hero}>
           {heroSource ? (
