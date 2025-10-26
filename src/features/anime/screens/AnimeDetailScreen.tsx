@@ -91,6 +91,7 @@ export default function AnimeDetailScreen() {
   const isMountedRef = useRef(true);
   const lastHapticValue = useRef<number>(0);
   const railOffsetX = useRef(0);
+  const railRef = useRef<View>(null);
 
   // Value <-> X position mapping helpers
   const valueToX = useCallback((value: number) => {
@@ -1028,12 +1029,17 @@ export default function AnimeDetailScreen() {
               </Text>
 
               <View
+                ref={railRef}
                 style={styles.sliderRail}
                 onLayout={(e) => {
-                  setRailWidth(e.nativeEvent.layout.width);
-                  e.nativeEvent.target.measure((x, y, width, height, pageX, pageY) => {
-                    railOffsetX.current = pageX;
-                  });
+                  const { width, x } = e.nativeEvent.layout;
+                  setRailWidth(width);
+                  // Measure absolute position on screen
+                  if (railRef.current) {
+                    railRef.current.measure((fx, fy, w, h, px, py) => {
+                      railOffsetX.current = px;
+                    });
+                  }
                 }}
                 {...panResponder.panHandlers}
               >
