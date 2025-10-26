@@ -113,16 +113,21 @@ export default function AnimeDetailScreen() {
   const panResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dx) > Math.abs(g.dy),
+      onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dx) > 2 || Math.abs(g.dy) > 2,
       onPanResponderGrant: (evt) => {
-        setIsDragging(true);
+        // Don't set dragging yet - wait to see if it's a tap or drag
         // Use pageX (absolute screen coord) - railOffsetX (rail's left edge) = position within rail
         const touchX = evt.nativeEvent.pageX - railOffsetX.current;
         const rawValue = xToValue(touchX);
         setDragValue(rawValue);
       },
-      onPanResponderMove: async (evt) => {
+      onPanResponderMove: async (evt, gestureState) => {
         if (railWidth === 0) return;
+
+        // Set dragging flag on first move
+        if (!isDragging && (Math.abs(gestureState.dx) > 2 || Math.abs(gestureState.dy) > 2)) {
+          setIsDragging(true);
+        }
 
         // Calculate position relative to rail
         const touchX = evt.nativeEvent.pageX - railOffsetX.current;
@@ -150,11 +155,26 @@ export default function AnimeDetailScreen() {
         }
       },
       onPanResponderRelease: async () => {
-        // Snap to 0.1 on release
+        // Snap to 0.1 and persist
         if (dragValue !== null) {
           const snapped = Math.round(dragValue * 10) / 10;
           const clamped = Math.max(1.0, Math.min(10.0, snapped));
-          setMyRating(clamped);
+
+          // Clear 11/10 flag if tapping/dragging to 1-10 range
+          if (myRating === 11) {
+            try {
+              const userId = await getCurrentUserId();
+              if (userId) {
+                await supabase.from('user_eleven').delete().eq('user_id', userId).eq('anime_id', id);
+                if (DEV) console.log('[ratings] release: cleared 11/10 flag');
+              }
+            } catch (e: any) {
+              if (DEV) console.warn('[ratings] release: failed to clear 11/10', e?.message ?? e);
+            }
+          }
+
+          // Persist to database
+          onPickMyRating(clamped);
         }
         setDragValue(null);
         setIsDragging(false);
