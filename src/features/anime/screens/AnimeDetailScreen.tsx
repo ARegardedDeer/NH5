@@ -20,6 +20,7 @@ import { useAnimeById } from '../hooks/useAnimeById';
 import { theme } from '../../../ui/theme';
 import { supabase, whenAuthed } from '../../../db/supabaseClient';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { RatingBadge, RatingSheet } from '../../../components/rating';
 
 const DEV = __DEV__;
 const DEV_VERBOSE = __DEV__ && false; // flip to true for deep debugging
@@ -81,110 +82,11 @@ export default function AnimeDetailScreen() {
   const [supportsUserRating, setSupportsUserRating] = useState(true);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [ratingUIOpen, setRatingUIOpen] = useState(false);
-  const [isDragging, setIsDragging] = useState(false);
-  const [dragValue, setDragValue] = useState<number | null>(null);
   const [toast, setToast] = useState({ visible: false, message: '' });
-  const [railWidth, setRailWidth] = useState(0);
 
   const myRatingPrevRef = useRef<number | null>(null);
   const myRatingDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isMountedRef = useRef(true);
-  const lastHapticValue = useRef<number>(0);
-  const railOffsetX = useRef(0);
-  const railRef = useRef<View>(null);
-
-  // Value <-> X position mapping helpers
-  const valueToX = useCallback((value: number) => {
-    if (!railWidth) return 0;
-    const clamped = Math.max(1, Math.min(10, value));
-    const pct = (clamped - 1) / 9; // 1..10 -> 0..1
-    return pct * railWidth;
-  }, [railWidth]);
-
-  const xToValue = useCallback((x: number) => {
-    if (!railWidth) return 5;
-    const clampedX = Math.max(0, Math.min(railWidth, x));
-    const pct = clampedX / railWidth;
-    const value = 1 + (pct * 9); // 0..1 -> 1..10
-    return Math.round(value * 10) / 10; // round to 0.1 precision
-  }, [railWidth]);
-
-  // PanResponder for draggable slider (works on simulator & device)
-  const panResponder = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dx) > 2 || Math.abs(g.dy) > 2,
-      onPanResponderGrant: (evt) => {
-        // Don't set dragging yet - wait to see if it's a tap or drag
-        // Use pageX (absolute screen coord) - railOffsetX (rail's left edge) = position within rail
-        const touchX = evt.nativeEvent.pageX - railOffsetX.current;
-        const rawValue = xToValue(touchX);
-        setDragValue(rawValue);
-      },
-      onPanResponderMove: async (evt, gestureState) => {
-        if (railWidth === 0) return;
-
-        // Set dragging flag on first move
-        if (!isDragging && (Math.abs(gestureState.dx) > 2 || Math.abs(gestureState.dy) > 2)) {
-          setIsDragging(true);
-        }
-
-        // Calculate position relative to rail
-        const touchX = evt.nativeEvent.pageX - railOffsetX.current;
-        const rawValue = xToValue(touchX);
-        setDragValue(rawValue);
-
-        // If user was at 11/10 and drags slider, clear the 11/10 flag (once)
-        if (myRating === 11 && isDragging) {
-          try {
-            const userId = await getCurrentUserId();
-            if (userId) {
-              await supabase.from('user_eleven').delete().eq('user_id', userId).eq('anime_id', id);
-              if (DEV) console.log('[ratings] drag: cleared 11/10 flag');
-            }
-          } catch (e: any) {
-            if (DEV) console.warn('[ratings] drag: failed to clear 11/10', e?.message ?? e);
-          }
-        }
-
-        // Haptic every 0.5
-        const halfStep = Math.round(rawValue * 2);
-        if (halfStep !== lastHapticValue.current) {
-          haptic('light');
-          lastHapticValue.current = halfStep;
-        }
-      },
-      onPanResponderRelease: async () => {
-        // Snap to 0.1 and persist
-        if (dragValue !== null) {
-          const snapped = Math.round(dragValue * 10) / 10;
-          const clamped = Math.max(1.0, Math.min(10.0, snapped));
-
-          // Clear 11/10 flag if tapping/dragging to 1-10 range
-          if (myRating === 11) {
-            try {
-              const userId = await getCurrentUserId();
-              if (userId) {
-                await supabase.from('user_eleven').delete().eq('user_id', userId).eq('anime_id', id);
-                if (DEV) console.log('[ratings] release: cleared 11/10 flag');
-              }
-            } catch (e: any) {
-              if (DEV) console.warn('[ratings] release: failed to clear 11/10', e?.message ?? e);
-            }
-          }
-
-          // Persist to database
-          onPickMyRating(clamped);
-        }
-        setDragValue(null);
-        setIsDragging(false);
-      },
-      onPanResponderTerminate: () => {
-        setDragValue(null);
-        setIsDragging(false);
-      },
-    })
-  ).current;
 
   useEffect(() => {
     setIsStoryExpanded(false);
@@ -907,32 +809,11 @@ export default function AnimeDetailScreen() {
           )}
         </View>
 
-        <TouchableOpacity
-          style={styles.myRatingCard}
+        <RatingBadge
+          value={myRating}
+          loading={!authReady || myRatingLoading}
           onPress={() => setRatingUIOpen(true)}
-          disabled={!authReady || myRatingLoading || savingMyRating}
-          activeOpacity={0.7}
-        >
-          <View style={styles.myRatingHeader}>
-            <Text style={styles.myRatingLabel}>My Rating</Text>
-            <View style={styles.myRatingValue}>
-              {savingMyRating ? (
-                <ActivityIndicator size="small" color="#A78BFA" />
-              ) : (
-                <Text style={styles.myRatingValueText}>
-                  {myRating === 11 ? '11/10' : myRating !== null ? myRating.toFixed(1) : '–'}
-                </Text>
-              )}
-            </View>
-          </View>
-          {(!authReady || myRatingLoading) ? (
-            <View style={styles.myRatingSpinner}>
-              <ActivityIndicator size="small" color="#A78BFA" />
-            </View>
-          ) : (
-            <Text style={styles.myRatingHint}>Tap to rate (1.0 - 10.0)</Text>
-          )}
-        </TouchableOpacity>
+        />
 
         <View style={styles.section}>
           <View style={styles.sectionHeaderRow}>
@@ -1017,129 +898,36 @@ export default function AnimeDetailScreen() {
         <View style={styles.bottomSpacer} />
       </ScrollView>
 
-      {/* Rating Slider Modal */}
-      <Modal
+      {/* Rating Sheet Component */}
+      <RatingSheet
         visible={ratingUIOpen}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setRatingUIOpen(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalSheet}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Rate this anime</Text>
-              <TouchableOpacity onPress={() => setRatingUIOpen(false)}>
-                <Text style={styles.modalClose}>✕</Text>
-              </TouchableOpacity>
-            </View>
-
-            <TouchableOpacity
-              style={styles.elevenButton}
-              onPress={onSetEleven}
-            >
-              <Text style={styles.elevenButtonText}>⭐ Set as 11/10 ⭐</Text>
-            </TouchableOpacity>
-
-            <View style={styles.sliderContainer}>
-              <Text style={styles.sliderValue}>
-                {isDragging
-                  ? (dragValue !== null ? dragValue.toFixed(1) : '–')
-                  : (myRating === 11 ? '11/10' : myRating !== null ? myRating.toFixed(1) : '–')
-                }
-              </Text>
-
-              {/* Wrapper with large touch area */}
-              <View
-                style={styles.sliderWrapper}
-                {...panResponder.panHandlers}
-              >
-                <View
-                  ref={railRef}
-                  style={styles.sliderRail}
-                  onLayout={(e) => {
-                    const { width, x } = e.nativeEvent.layout;
-                    setRailWidth(width);
-                    // Measure absolute position on screen
-                    if (railRef.current) {
-                      railRef.current.measure((fx, fy, w, h, px, py) => {
-                        railOffsetX.current = px;
-                      });
-                    }
-                  }}
-                >
-                  {/* Gradient fill - tracks dragValue during drag for smooth feedback */}
-                  <View
-                    style={[
-                      styles.sliderFill,
-                      {
-                        width: railWidth > 0
-                          ? (() => {
-                              const displayValue = isDragging ? (dragValue ?? 5) : (myRating ?? 5);
-                              if (displayValue === 11 || (myRating === 11 && !isDragging)) {
-                                return '100%';
-                              }
-                              const clamped = Math.max(1, Math.min(10, displayValue));
-                              return `${((clamped - 1) / 9) * 100}%`;
-                            })()
-                          : '0%',
-                      },
-                    ]}
-                  />
-
-                  {/* Thumb - visual only, no handlers (wrapper handles interaction) */}
-                  {(isDragging || myRating !== null) && railWidth > 0 ? (
-                    <Animated.View
-                      style={[
-                        styles.sliderThumb,
-                        {
-                          left: (() => {
-                            const displayValue = isDragging ? (dragValue ?? 5) : (myRating === 11 ? 10 : myRating ?? 5);
-                            const clamped = Math.max(1, Math.min(10, displayValue));
-                            return ((clamped - 1) / 9) * railWidth - 12;
-                          })(),
-                          transform: [{ scale: isDragging ? 1.2 : 1 }],
-                        },
-                      ]}
-                    />
-                  ) : null}
-                </View>
-              </View>
-
-              <View style={styles.sliderLabels}>
-                <Text style={styles.sliderLabelText}>1.0</Text>
-                <Text style={styles.sliderLabelText}>10.0</Text>
-              </View>
-            </View>
-
-            <View style={styles.modalActions}>
-              <TouchableOpacity
-                style={[styles.modalButton, styles.modalButtonSecondary]}
-                onPress={() => {
-                  setMyRating(null);
-                  setRatingUIOpen(false);
-                  // Optionally clear from DB here
-                }}
-              >
-                <Text style={styles.modalButtonTextSecondary}>Clear</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.modalButton, styles.modalButtonPrimary]}
-                onPress={() => {
-                  if (myRating !== null) {
-                    onPickMyRating(myRating);
-                  }
-                  setRatingUIOpen(false);
-                }}
-                disabled={myRating === null}
-              >
-                <Text style={styles.modalButtonTextPrimary}>
-                  {myRating !== null ? 'Save' : 'Pick a rating'}
-                </Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
+        value={myRating}
+        onClose={() => setRatingUIOpen(false)}
+        onCommit={async (finalVal) => {
+          if (finalVal == null) return;
+          // Clear 11/10 flag if setting 1-10 value
+          if (myRating === 11) {
+            try {
+              const userId = await getCurrentUserId();
+              if (userId) {
+                await supabase.from('user_eleven').delete().eq('user_id', userId).eq('anime_id', id);
+                if (DEV) console.log('[ratings] commit: cleared 11/10 flag');
+              }
+            } catch (e: any) {
+              if (DEV) console.warn('[ratings] commit: failed to clear 11/10', e?.message ?? e);
+            }
+          }
+          onPickMyRating(finalVal);
+        }}
+        onClear={async () => {
+          setMyRating(null);
+          setRatingUIOpen(false);
+          // TODO: Add DB clear logic if needed
+        }}
+        onSetEleven={onSetEleven}
+        saving={savingMyRating}
+        allowEleven
+      />
 
       {/* Toast */}
       {toast.visible ? (
