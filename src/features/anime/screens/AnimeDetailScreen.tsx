@@ -21,6 +21,8 @@ import { theme } from '../../../ui/theme';
 import { supabase, whenAuthed } from '../../../db/supabaseClient';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { RatingBadge, RatingSheet } from '../../../components/rating';
+import { readUserRating, upsertUserRating, deleteUserRating, setElevenFlag, normalizeScore } from '../../rating/persistence';
+import { useToast } from '../../../ui/toast/ToastHost';
 
 const DEV = __DEV__;
 const DEV_VERBOSE = __DEV__ && false; // flip to true for deep debugging
@@ -37,7 +39,7 @@ const haptic = (type: 'light' | 'medium' | 'heavy') => {
 
 // Cache keys with version for safe invalidation (bump v1 -> v2 on schema changes)
 const getUserListCacheKey = (animeId: string) => `nh5::user_list::${animeId}::v1`;
-const getUserRatingCacheKey = (animeId: string) => `nh5::user_rating::${animeId}::v1`;
+const getUserRatingCacheKey = (animeId: string) => `nh5::user_rating::${animeId}::v2`;
 
 type StatusOption = (typeof STATUSES)[number];
 
@@ -67,6 +69,7 @@ export default function AnimeDetailScreen() {
   const { id, title } = (route.params || {}) as RouteParams;
 
   const { data, isLoading, error } = useAnimeById(id);
+  const toast = useToast();
 
   const [bookmarked, setBookmarked] = useState(false);
   const [status, setStatus] = useState<StatusOption | null>(null);
@@ -79,10 +82,8 @@ export default function AnimeDetailScreen() {
   const [myRating, setMyRating] = useState<number | null>(null);
   const [myRatingLoading, setMyRatingLoading] = useState(false);
   const [savingMyRating, setSavingMyRating] = useState(false);
-  const [supportsUserRating, setSupportsUserRating] = useState(true);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [ratingUIOpen, setRatingUIOpen] = useState(false);
-  const [toast, setToast] = useState({ visible: false, message: '' });
 
   const myRatingPrevRef = useRef<number | null>(null);
   const myRatingDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -182,152 +183,17 @@ export default function AnimeDetailScreen() {
 
   useEffect(() => {
     if (!authReady || !id) return;
-    if (!supportsUserRating) {
+    (async () => {
+      const { data: got } = await supabase.auth.getUser();
+      const uid = got?.user?.id;
+      if (!uid) return;
+      setMyRatingLoading(true);
+      const val = await readUserRating({ uid, animeId: id });
+      setMyRating(val ?? null);
       setMyRatingLoading(false);
-      return;
-    }
-    if (!currentUserId) return;
-
-    let alive = true;
-    setMyRatingLoading(true);
-    loadMyRating(currentUserId, id).then((result) => {
-      if (!alive) return;
-      setSupportsUserRating(result.supported);
-      if (result.supported) {
-        setMyRating(result.rating);
-      }
-      setMyRatingLoading(false);
-    });
-
-    return () => {
-      alive = false;
-    };
-  }, [authReady, currentUserId, id, loadMyRating, supportsUserRating]);
-
-  useEffect(() => {
-    if (!id) return;
-    refreshSummary(id);
-  }, [id, refreshSummary]);
-
-  // keep exclusivity in UI
-
-  const onPickMyRating = useCallback(
-    (value: number) => {
-      if (value < 1 || value > 10) return;
-      if (!id) return;
-
-      if (!supportsUserRating || !currentUserId) {
-        setMyRating(value);
-        if (DEV) console.log(`[ratings] upsert: persisted=false reason=schema score=${value}`);
-        return;
-      }
-
-      if (myRatingDebounceRef.current) {
-        clearTimeout(myRatingDebounceRef.current);
-      }
-
-      myRatingPrevRef.current = myRating;
-      setMyRating(value);
-      setSavingMyRating(true);
-
-      const userId = currentUserId;
-      myRatingDebounceRef.current = setTimeout(() => {
-        (async () => {
-          try {
-            const { error } = await supabase
-              .from('ratings')
-              .upsert(
-                {
-                  user_id: userId,
-                  anime_id: id,
-                  score_overall: value,
-                },
-                { onConflict: 'user_id,anime_id' }
-              );
-            if (error) {
-              const message = error.message || error.code || 'unknown';
-              if (message.includes('column') && message.includes('user_id')) {
-                if (DEV) console.log(`[ratings] upsert: persisted=false reason=schema score=${value}`);
-                setSupportsUserRating(false);
-                if (isMountedRef.current) {
-                  setSavingMyRating(false);
-                }
-                return;
-              }
-              throw error;
-            }
-            if (DEV) console.log(`[ratings] upsert: persisted=true score=${value}`);
-            await refreshSummary(id);
-          } catch (err: any) {
-            const message = err?.message ?? 'unknown';
-            if (DEV) console.log(`[ratings] upsert: persisted=false score=${value} error=${message}`);
-            if (isMountedRef.current) {
-              setMyRating(myRatingPrevRef.current ?? null);
-            }
-          } finally {
-            if (isMountedRef.current) {
-              setSavingMyRating(false);
-            }
-          }
-        })().finally(() => {
-          myRatingDebounceRef.current = null;
-        });
-      }, 300);
-    },
-    [supportsUserRating, currentUserId, id, myRating, refreshSummary]
-  );
-
-  const persistUserList = useCallback(
-    async ({ userId, animeId, bookmarked: nextBookmarked, status: nextStatus }: PersistPayload) => {
-      if (!hasUserListsTable || !userId) return false;
-      const payload = {
-        user_id: userId,
-        anime_id: animeId,
-        status: nextStatus,
-        bookmarked: nextBookmarked,
-        updated_at: new Date().toISOString(),
-      };
-
-      const { error } = await supabase
-        .from('user_lists')
-        .upsert(payload, { onConflict: 'user_id,anime_id' });
-
-      return !error;
-    },
-    [hasUserListsTable]
-  );
-
-  const loadMyRating = useCallback(async (userId: string, animeId: string) => {
-    try {
-      const { data: row, error } = await supabase
-        .from('ratings')
-        .select('score_overall')
-        .eq('user_id', userId)
-        .eq('anime_id', animeId)
-        .maybeSingle();
-
-      if (error) {
-        const message = error.message || error.code || 'unknown';
-        if (message.includes('column') && message.includes('user_id')) {
-          if (DEV) console.log('[ratings] user: unsupported schema');
-          if (DEV) console.log('[ratings] user: found=false score=none');
-          return { rating: null, supported: false };
-        }
-        if (DEV) console.log(`[ratings] user: found=false score=none error=${message}`);
-        return { rating: null, supported: true };
-      }
-
-      const score = typeof row?.score_overall === 'number' ? row.score_overall : null;
-      if (DEV) console.log(`[ratings] user: found=${score !== null} score=${score ?? 'none'}`);
-      return { rating: score, supported: true };
-    } catch (err: any) {
-      if (DEV) {
-        const message = err?.message ?? 'unknown';
-        console.log(`[ratings] user: found=false score=none error=${message}`);
-      }
-      return { rating: null, supported: true };
-    }
-  }, []);
+      if (DEV) console.log('[ratings] load:', { uid: !!uid, animeId: id, val });
+    })();
+  }, [authReady, id]);
 
   const refreshSummary = useCallback(
     async (animeId: string) => {
@@ -357,55 +223,123 @@ export default function AnimeDetailScreen() {
     []
   );
 
-  const onSetEleven = async () => {
-    try {
-      const userId = await getCurrentUserId();
-      if (!userId) {
-        Alert.alert('Error', 'Could not determine user ID');
+  useEffect(() => {
+    if (!id) return;
+    refreshSummary(id);
+  }, [id, refreshSummary]);
+
+  // keep exclusivity in UI
+
+  const commitMyRating = useCallback(async (next: number) => {
+    if (!authReady || !id) return;
+    const { data: got } = await supabase.auth.getUser();
+    const uid = got?.user?.id;
+    if (!uid) return;
+
+    const score = normalizeScore(next);
+    myRatingPrevRef.current = myRating;
+    setMyRating(score);
+    setSavingMyRating(true);
+    setRatingUIOpen(false);
+
+    // If score is 11, use atomic RPC to handle both user_eleven + ratings
+    if (score === 11) {
+      const { error } = await supabase.rpc('nh5_set_eleven', { p_anime_id: id });
+      if (error) {
+        setMyRating(myRatingPrevRef.current ?? null);
+        setSavingMyRating(false);
+        toast.show('Error saving 11/10');
+        if (DEV) console.warn('[ratings] eleven rpc error:', error.message);
         return;
       }
-
-      // Optimistic update
-      myRatingPrevRef.current = myRating;
-      setMyRating(11);
-      setRatingUIOpen(false);
-
-      // Write to both ratings (score=11) and user_eleven tables
-      const { error: ratingError } = await supabase
-        .from('ratings')
-        .upsert(
-          { user_id: userId, anime_id: id, score_overall: 11 },
-          { onConflict: 'user_id,anime_id' }
-        );
-
-      if (ratingError) {
-        const message = ratingError.message || ratingError.code || 'unknown';
-        if (message.includes('column') && message.includes('user_id')) {
-          if (DEV) console.log('[ratings] 11/10: persisted=false reason=schema score=11');
-          setSupportsUserRating(false);
-        } else {
-          throw ratingError;
-        }
-      } else {
-        if (DEV) console.log('[ratings] 11/10: persisted=true score=11');
+    } else {
+      // For scores 1-10, use regular upsert and clear eleven flag if needed
+      const res = await upsertUserRating({ uid, animeId: id, score });
+      if (!res.ok) {
+        setMyRating(myRatingPrevRef.current ?? null);
+        setSavingMyRating(false);
+        toast.show('Error saving rating');
+        if (DEV) console.warn('[ratings] commit: persisted=false error=', res.error);
+        return;
       }
-
-      const { error: elevenError } = await supabase
-        .from('user_eleven')
-        .upsert({ user_id: userId, anime_id: id }, { onConflict: 'user_id' });
-
-      if (elevenError) throw elevenError;
-
-      console.log('[profile] setEleven ok', { userId, animeId: id });
-      await refreshSummary(id);
-      Alert.alert('Saved', 'This is now your 11/10 highlight!');
-    } catch (e: any) {
-      // Rollback on error
-      setMyRating(myRatingPrevRef.current);
-      console.warn('[profile] setEleven error', e);
-      Alert.alert('Error', 'Could not set 11/10.');
     }
-  };
+
+    if (DEV) console.log('[ratings] commit: persisted=true score=', score);
+    toast.show(`Saved: ${score === 11 ? '11/10' : `${score}/10`}`);
+    setSavingMyRating(false);
+    setReloadKey(k => k + 1);
+  }, [authReady, id, myRating, toast]);
+
+  const clearMyRating = useCallback(async () => {
+    if (!authReady || !id) return;
+    const { data: got } = await supabase.auth.getUser();
+    const uid = got?.user?.id;
+    if (!uid) return;
+
+    setSavingMyRating(true);
+    const del = await deleteUserRating({ uid, animeId: id });
+    if (!del.ok && DEV) console.warn('[ratings] clear: error=', del.error);
+
+    const f = await setElevenFlag({ uid, animeId: id, enabled: false });
+    if (!f.ok && DEV) console.warn('[ratings] clear eleven error=', f.error);
+
+    setMyRating(null);
+    setSavingMyRating(false);
+    setRatingUIOpen(false);
+    toast.show('Rating cleared');
+    setReloadKey(k => k + 1);
+    if (DEV) console.log('[ratings] clear=1');
+  }, [authReady, id, toast]);
+
+  const persistUserList = useCallback(
+    async ({ userId, animeId, bookmarked: nextBookmarked, status: nextStatus }: PersistPayload) => {
+      if (!hasUserListsTable || !userId) return false;
+      const payload = {
+        user_id: userId,
+        anime_id: animeId,
+        status: nextStatus,
+        bookmarked: nextBookmarked,
+        updated_at: new Date().toISOString(),
+      };
+
+      const { error } = await supabase
+        .from('user_lists')
+        .upsert(payload, { onConflict: 'user_id,anime_id' });
+
+      return !error;
+    },
+    [hasUserListsTable]
+  );
+
+  const onSetEleven = useCallback(async () => {
+    if (!authReady || !id) return;
+    const { data: got } = await supabase.auth.getUser();
+    const uid = got?.user?.id;
+    if (!uid) return;
+
+    // Optimistic UI update
+    myRatingPrevRef.current = myRating;
+    setMyRating(11);
+    setSavingMyRating(true);
+    setRatingUIOpen(false);
+
+    // Atomic RPC call (handles both user_eleven + ratings in one transaction)
+    const { error } = await supabase.rpc('nh5_set_eleven', { p_anime_id: id });
+
+    if (error) {
+      // Rollback optimistic UI on error
+      setMyRating(myRatingPrevRef.current ?? null);
+      setSavingMyRating(false);
+      toast.show('Error saving 11/10');
+      if (DEV) console.warn('[ratings] eleven rpc error:', error.message);
+      return;
+    }
+
+    if (DEV) console.log('[ratings] eleven: persisted=true score=11');
+    toast.show('Saved: 11/10');
+    setSavingMyRating(false);
+    setReloadKey(k => k + 1);
+  }, [authReady, id, myRating, toast]);
 
   const onToggleBookmark = useCallback(async () => {
     const next = !bookmarked;
@@ -902,38 +836,23 @@ export default function AnimeDetailScreen() {
         visible={ratingUIOpen}
         value={myRating}
         onClose={() => setRatingUIOpen(false)}
-        onCommit={async (finalVal) => {
-          if (finalVal == null) return;
-          // Clear 11/10 flag if setting 1-10 value
-          if (myRating === 11) {
-            try {
-              const userId = await getCurrentUserId();
-              if (userId) {
-                await supabase.from('user_eleven').delete().eq('user_id', userId).eq('anime_id', id);
-                if (DEV) console.log('[ratings] commit: cleared 11/10 flag');
-              }
-            } catch (e: any) {
-              if (DEV) console.warn('[ratings] commit: failed to clear 11/10', e?.message ?? e);
+        onChange={async (liveValue) => {
+          if (myRating === 11 && liveValue !== null && liveValue < 11) {
+            // Clear eleven flag when dragging from 11 to 1-10
+            const { data: got } = await supabase.auth.getUser();
+            const uid = got?.user?.id;
+            if (uid) {
+              await setElevenFlag({ uid, animeId: id, enabled: false });
+              if (DEV) console.log('[ratings] drag: cleared 11/10 flag');
             }
           }
-          onPickMyRating(finalVal);
         }}
-        onClear={async () => {
-          setMyRating(null);
-          setRatingUIOpen(false);
-          // TODO: Add DB clear logic if needed
-        }}
+        onCommit={commitMyRating}
+        onClear={clearMyRating}
         onSetEleven={onSetEleven}
         saving={savingMyRating}
         allowEleven
       />
-
-      {/* Toast */}
-      {toast.visible ? (
-        <View style={styles.toast}>
-          <Text style={styles.toastText}>{toast.message}</Text>
-        </View>
-      ) : null}
     </SafeAreaView>
   );
 }
@@ -1263,26 +1182,5 @@ const styles = StyleSheet.create({
     color: '#A78BFA',
     fontSize: 16,
     fontWeight: '600',
-  },
-
-  // Toast
-  toast: {
-    position: 'absolute',
-    bottom: 80,
-    left: 20,
-    right: 20,
-    backgroundColor: '#27243A',
-    borderRadius: 12,
-    padding: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 8,
-  },
-  toastText: {
-    color: '#FFFFFF',
-    fontSize: 14,
-    textAlign: 'center',
   },
 });
