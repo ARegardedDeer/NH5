@@ -2,12 +2,13 @@ import React from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import HomeScreen from '../features/home/HomeScreen';
-import AnimeListScreen from '../features/anime/screens/AnimeListScreen';
 import AnimeDetailScreen from '../features/anime/screens/AnimeDetailScreen';
 import PlaceholderScreen from '../features/misc/PlaceholderScreen';
 import ProfileScreen from '../features/profile/screens/ProfileScreen';
 import EditProfileScreen from '../features/profile/screens/EditProfileScreen';
 import ElevenPickerScreen from '../features/profile/screens/ElevenPickerScreen';
+import { DiscoverScreen } from '../screens/DiscoverScreen';
+// @ts-ignore - Icon library type definitions
 import MaterialIcon from 'react-native-vector-icons/MaterialIcons';
 
 type DiscoverStackParamList = {
@@ -18,7 +19,7 @@ const DiscoverStack = createNativeStackNavigator<DiscoverStackParamList>();
 function DiscoverStackNavigator() {
   return (
     <DiscoverStack.Navigator>
-      <DiscoverStack.Screen name="DiscoverList" component={AnimeListScreen} options={{ title: 'Discover' }}/>
+      <DiscoverStack.Screen name="DiscoverList" component={DiscoverScreen} options={{ title: 'Discover' }}/>
       <DiscoverStack.Screen name="AnimeDetail" component={AnimeDetailScreen} options={({ route }) => ({ title: route.params?.title ?? 'Detail' })}/>
     </DiscoverStack.Navigator>
   );
