@@ -24,23 +24,23 @@ export interface Theme {
   input: string;
 }
 
-// Light mode theme (default)
+// Light mode theme (modern, clean aesthetic)
 export const lightTheme: Theme = {
-  background: '#FFFFFF',
-  foreground: '#111827',
+  background: '#FAFBFC',         // Light cream (not pure white)
+  foreground: '#0F172A',         // Almost black
 
-  card: '#FFFFFF',
-  cardBorder: '#E5E7EB',
+  card: '#FFFFFF',               // Pure white cards
+  cardBorder: '#E2E8F0',         // Soft border
 
-  primary: '#6366F1',
+  primary: '#7C3AED',            // Vibrant purple
   primaryForeground: '#FFFFFF',
 
-  muted: '#F9FAFB',
-  mutedForeground: '#6B7280',
+  muted: '#F1F5F9',              // Subtle muted bg
+  mutedForeground: '#64748B',    // Secondary text
 
-  accent: '#F59E0B',
+  accent: '#F472B6',             // Pink accent
 
-  border: '#E5E7EB',
+  border: '#E2E8F0',
   input: '#F9FAFB',
 };
 
@@ -77,13 +77,13 @@ export const spacing = {
   xxl: 32,
 };
 
-// Shared border radius
+// Shared border radius (updated for modern look)
 export const borderRadius = {
-  sm: 6,
-  md: 8,
-  lg: 12,
-  xl: 16,
-  pill: 18,
+  sm: 8,
+  md: 12,
+  lg: 16,           // Cards (increased from 12)
+  xl: 20,           // Hero cards (increased from 16)
+  pill: 999,        // Fully rounded pills
   full: 999,
 };
 
@@ -92,4 +92,29 @@ export const animationDuration = {
   fast: 150,
   normal: 200,
   slow: 300,
+};
+
+// iOS-style shadows
+export const shadow = {
+  sm: {
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  md: {
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 3,
+  },
+  lg: {
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.1,
+    shadowRadius: 16,
+    elevation: 4,
+  },
 };

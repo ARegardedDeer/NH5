@@ -6,7 +6,7 @@ import {
   StyleSheet,
 } from 'react-native';
 // import { useNavigation } from '@react-navigation/native';
-import { currentTheme, spacing, borderRadius } from '../../styles/discoverStyles';
+import { currentTheme, spacing, borderRadius, shadow } from '../../styles/discoverStyles';
 
 interface RatingCTACardProps {
   ratingsCount: number;
@@ -74,30 +74,30 @@ export function RatingCTACard({ ratingsCount }: RatingCTACardProps) {
 
 const styles = StyleSheet.create({
   container: {
-    paddingHorizontal: spacing.lg,
-    marginBottom: spacing.xl,
+    paddingHorizontal: 20,
+    marginBottom: spacing.xxl,
   },
   card: {
-    backgroundColor: '#FEFCE8',
-    borderWidth: 1,
-    borderColor: '#FCD34D',
+    backgroundColor: currentTheme.card,
     borderRadius: borderRadius.xl,
-    padding: spacing.xl,
+    padding: 24,
+    ...shadow.md,
   },
   header: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#111827',
+    fontSize: 20,
+    fontWeight: '700',
+    color: currentTheme.foreground,
+    letterSpacing: -0.4,
     marginBottom: spacing.md,
   },
   body: {
     fontSize: 15,
-    color: '#374151',
+    color: currentTheme.mutedForeground,
     marginBottom: 6,
   },
   bold: {
     fontWeight: '700',
-    color: '#111827',
+    color: currentTheme.foreground,
   },
   progressContainer: {
     marginTop: spacing.lg,
@@ -105,20 +105,20 @@ const styles = StyleSheet.create({
   },
   progressTrack: {
     height: 8,
-    backgroundColor: '#FEF3C7',
+    backgroundColor: '#E9D5FF',
     borderRadius: borderRadius.full,
     overflow: 'hidden',
     marginBottom: spacing.sm,
   },
   progressFill: {
     height: '100%',
-    backgroundColor: '#F59E0B',
+    backgroundColor: currentTheme.primary,
     borderRadius: borderRadius.full,
   },
   progressText: {
     fontSize: 13,
     fontWeight: '600',
-    color: '#92400E',
+    color: currentTheme.primary,
     textAlign: 'right',
   },
   button: {

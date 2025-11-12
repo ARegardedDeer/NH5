@@ -15,6 +15,8 @@ import { StaffPicksSection } from '../components/discover/StaffPicksSection';
 import { BecauseYouWatchedSection } from '../components/discover/BecauseYouWatchedSection';
 import { RatingCTACard } from '../components/discover/RatingCTACard';
 import { GenrePillsSection } from '../components/discover/GenrePillsSection';
+import { DiscoverySwipeCTA } from '../components/discover/DiscoverySwipeCTA';
+import { DiscoverySwipeModal } from './DiscoverySwipeModal';
 
 // Navigation types
 type DiscoverStackParamList = {
@@ -28,6 +30,7 @@ export function DiscoverScreen() {
   const navigation = useNavigation<DiscoverNavigation>();
   const [authReady, setAuthReady] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
+  const [swipeModalVisible, setSwipeModalVisible] = useState(false);
 
   // Wait for auth to be ready
   useEffect(() => {
@@ -88,6 +91,9 @@ export function DiscoverScreen() {
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
         >
+          {/* Discovery Swipe CTA */}
+          <DiscoverySwipeCTA onPress={() => setSwipeModalVisible(true)} />
+
           {/* Staff Picks */}
           <StaffPicksSection onAnimePress={handleAnimePress} />
 
@@ -108,6 +114,12 @@ export function DiscoverScreen() {
           <GenrePillsSection />
         </ScrollView>
       </View>
+
+      {/* Discovery Swipe Modal */}
+      <DiscoverySwipeModal
+        visible={swipeModalVisible}
+        onClose={() => setSwipeModalVisible(false)}
+      />
     </SafeAreaView>
   );
 }

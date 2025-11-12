@@ -5,7 +5,7 @@ import {
   Pressable,
   StyleSheet,
 } from 'react-native';
-import { currentTheme, spacing, borderRadius } from '../../styles/discoverStyles';
+import { currentTheme, spacing, borderRadius, shadow } from '../../styles/discoverStyles';
 
 const GENRES = [
   'Action',
@@ -59,44 +59,54 @@ function GenrePill({ genre, onPress }: GenrePillProps) {
       ]}
       onPress={() => onPress(genre)}
     >
-      <Text style={styles.pillText}>{genre}</Text>
+      {({ pressed }) => (
+        <Text style={[styles.pillText, pressed && styles.pillTextPressed]}>
+          {genre}
+        </Text>
+      )}
     </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-    paddingHorizontal: spacing.lg,
+    paddingHorizontal: 20,
     marginBottom: spacing.xxl,
   },
   title: {
-    fontSize: 20,
-    fontWeight: '600',
+    fontSize: 24,
+    fontWeight: '700',
     color: currentTheme.foreground,
+    letterSpacing: -0.5,
     marginBottom: spacing.lg,
   },
   pillsContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: spacing.sm,
+    gap: spacing.md,
   },
   pill: {
-    height: 36,
-    paddingHorizontal: spacing.lg,
+    height: 40,
+    paddingHorizontal: 20,
     borderRadius: borderRadius.pill,
-    borderWidth: 1,
+    borderWidth: 1.5,
     borderColor: currentTheme.border,
-    backgroundColor: 'transparent',
+    backgroundColor: currentTheme.card,
     justifyContent: 'center',
     alignItems: 'center',
+    ...shadow.sm,
   },
   pillPressed: {
-    backgroundColor: currentTheme.muted,
-    transform: [{ scale: 0.98 }],
+    backgroundColor: currentTheme.primary,
+    borderColor: currentTheme.primary,
+    transform: [{ scale: 0.96 }],
   },
   pillText: {
     fontSize: 14,
-    fontWeight: '500',
+    fontWeight: '600',
     color: currentTheme.foreground,
+  },
+  pillTextPressed: {
+    color: currentTheme.primaryForeground,
   },
 });

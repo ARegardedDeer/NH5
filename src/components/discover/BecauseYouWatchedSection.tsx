@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '../../db/supabaseClient';
-import { currentTheme, spacing, borderRadius } from '../../styles/discoverStyles';
+import { currentTheme, spacing, borderRadius, shadow } from '../../styles/discoverStyles';
 
 interface Anime {
   id: string;
@@ -246,16 +246,17 @@ function RecommendationCard({ anime, onPress }: RecommendationCardProps) {
 
 const styles = StyleSheet.create({
   container: {
-    marginBottom: spacing.xl,
+    marginBottom: spacing.xxl,
   },
   header: {
-    paddingHorizontal: spacing.lg,
-    marginBottom: spacing.md,
+    paddingHorizontal: 20,
+    marginBottom: spacing.lg,
   },
   title: {
-    fontSize: 18,
-    fontWeight: '600',
+    fontSize: 20,
+    fontWeight: '700',
     color: currentTheme.foreground,
+    letterSpacing: -0.4,
     marginBottom: spacing.sm,
   },
   sourceTitle: {
@@ -263,15 +264,15 @@ const styles = StyleSheet.create({
   },
   reasoningChip: {
     alignSelf: 'flex-start',
-    backgroundColor: '#EEF2FF',
-    paddingVertical: 4,
-    paddingHorizontal: 8,
-    borderRadius: borderRadius.sm,
+    backgroundColor: '#EDE9FE',
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: borderRadius.pill,
   },
   reasoningText: {
     fontSize: 11,
-    fontWeight: '500',
-    color: '#4F46E5',
+    fontWeight: '600',
+    color: currentTheme.primary,
   },
   loadingContainer: {
     height: 225,
@@ -279,16 +280,19 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   scrollContent: {
-    paddingHorizontal: spacing.lg,
-    gap: spacing.md,
+    paddingHorizontal: 20,
+    gap: spacing.lg,
   },
   cardContainer: {
     width: 160,
+    ...shadow.md,
+    backgroundColor: currentTheme.card,
+    borderRadius: borderRadius.lg,
   },
   imageContainer: {
     width: 160,
     height: 225,
-    borderRadius: borderRadius.lg,
+    borderRadius: borderRadius.md,
     overflow: 'hidden',
     backgroundColor: currentTheme.muted,
   },

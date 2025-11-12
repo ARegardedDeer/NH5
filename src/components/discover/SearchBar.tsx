@@ -7,7 +7,7 @@ import {
 } from 'react-native';
 // @ts-ignore - Icon library type definitions
 import Ionicons from 'react-native-vector-icons/Ionicons';
-import { currentTheme, spacing, borderRadius } from '../../styles/discoverStyles';
+import { currentTheme, spacing, borderRadius, shadow } from '../../styles/discoverStyles';
 
 interface SearchBarProps {
   onFocus?: () => void;
@@ -46,19 +46,21 @@ export function SearchBar({
 
 const styles = StyleSheet.create({
   container: {
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
+    paddingHorizontal: 20,
+    paddingTop: spacing.md,
+    paddingBottom: spacing.lg,
     backgroundColor: currentTheme.background,
   },
   searchWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
-    height: 48,
-    backgroundColor: currentTheme.input,
-    borderWidth: 1,
+    height: 52,
+    backgroundColor: currentTheme.card,
+    borderWidth: 1.5,
     borderColor: currentTheme.border,
     borderRadius: borderRadius.lg,
-    paddingHorizontal: spacing.md,
+    paddingHorizontal: spacing.lg,
+    ...shadow.sm,
   },
   icon: {
     marginRight: spacing.sm,
