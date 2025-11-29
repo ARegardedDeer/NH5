@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { View, Text, FlatList, Pressable, StyleSheet, ActivityIndicator } from 'react-native';
 import { useContinueWatching } from '../../hooks/useContinueWatching';
 import { ContinueWatchingCard } from './ContinueWatchingCard';
+import { EpisodePickerModal } from './EpisodePickerModal';
 
 interface ContinueWatchingSectionProps {
   userId: string;
@@ -14,12 +15,21 @@ export const ContinueWatchingSection: React.FC<ContinueWatchingSectionProps> = (
   limit,
   onSeeAll,
 }) => {
-  const { data: continueWatching, isLoading, error } = useContinueWatching({ userId, limit });
+  const { data: continueWatching, isLoading, error } = useContinueWatching({ limit, userId });
+  const [selectedAnime, setSelectedAnime] = useState<any>(null);
 
-  const handleContinue = (animeId: string) => {
-    // TODO: Navigate to episode picker or increment episode
-    console.log('[ContinueWatching] Continue clicked for anime:', animeId);
-    // This will be implemented when we build the episode picker
+  const handleContinue = (item: any) => {
+    setSelectedAnime(item);
+  };
+
+  const handleCloseModal = () => {
+    setSelectedAnime(null);
+  };
+
+  const handleSeriesComplete = (animeId: string) => {
+    // TODO: Show rating modal and badge unlock
+    console.log('[ContinueWatching] Series completed:', animeId);
+    // This will be implemented when we build the completion flow
   };
 
   if (isLoading) {
@@ -35,7 +45,7 @@ export const ContinueWatchingSection: React.FC<ContinueWatchingSectionProps> = (
 
   if (error) {
     console.error('[ContinueWatching] Error:', error);
-    return null; // Don't show section if error
+    return null;
   }
 
   // Don't show section if no items
@@ -65,7 +75,7 @@ export const ContinueWatchingSection: React.FC<ContinueWatchingSectionProps> = (
             anime={item.anime}
             currentEpisode={item.current_episode}
             totalEpisodes={item.total_episodes}
-            onContinue={() => handleContinue(item.anime_id)}
+            onContinue={() => handleContinue(item)}
           />
         )}
         keyExtractor={(item) => item.id}
@@ -74,6 +84,22 @@ export const ContinueWatchingSection: React.FC<ContinueWatchingSectionProps> = (
         contentContainerStyle={styles.listContent}
         ItemSeparatorComponent={() => <View style={{ width: 12 }} />}
       />
+
+      {/* Episode Picker Modal */}
+      {selectedAnime && (
+        <EpisodePickerModal
+          visible={!!selectedAnime}
+          onClose={handleCloseModal}
+          userListId={selectedAnime.id}
+          animeId={selectedAnime.anime_id}
+          animeTitle={selectedAnime.anime.title}
+          currentEpisode={selectedAnime.current_episode}
+          totalEpisodes={selectedAnime.total_episodes}
+          hasSpecials={selectedAnime.anime.has_specials || false}
+          userId={userId}
+          onComplete={handleSeriesComplete}
+        />
+      )}
     </View>
   );
 };

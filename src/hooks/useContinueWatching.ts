@@ -76,7 +76,14 @@ export const useContinueWatching = (options?: UseContinueWatchingOptions) => {
       }
 
       console.log(`[useContinueWatching] Fetched ${data?.length || 0} items`);
-      return (data as ContinueWatchingItem[]) || [];
+
+      // Transform the data to ensure anime is an object, not an array
+      const transformedData = (data || []).map((item: any) => ({
+        ...item,
+        anime: Array.isArray(item.anime) ? item.anime[0] : item.anime,
+      }));
+
+      return transformedData as ContinueWatchingItem[];
     },
     enabled: !!userId,
     staleTime: 1000 * 60 * 5, // 5 minutes
