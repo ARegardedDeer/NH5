@@ -7,6 +7,7 @@ interface GenrePillsProps {
   maxVisible?: number;
   max?: number;
   style?: ViewStyle | ViewStyle[];
+  variant?: 'default' | 'overlay';
 }
 
 export function GenrePills({
@@ -15,6 +16,7 @@ export function GenrePills({
   maxVisible = 3,
   max,
   style,
+  variant = 'default',
 }: GenrePillsProps) {
   const source = Array.isArray(tags)
     ? tags
@@ -40,13 +42,38 @@ export function GenrePills({
   return (
     <View style={[styles.container, style]}>
       {visibleGenres.map((genre, idx) => (
-        <View key={idx} style={styles.pill}>
-          <Text style={styles.pillText}>{genre}</Text>
+        <View
+          key={idx}
+          style={[
+            styles.pill,
+            variant === 'overlay' && styles.pillOverlay,
+          ]}
+        >
+          <Text
+            style={[
+              styles.pillText,
+              variant === 'overlay' && styles.pillTextOverlay,
+            ]}
+          >
+            {genre}
+          </Text>
         </View>
       ))}
       {hasMore && (
-        <View style={styles.pill}>
-          <Text style={styles.pillText}>+{validGenres.length - limit}</Text>
+        <View
+          style={[
+            styles.pill,
+            variant === 'overlay' && styles.pillOverlay,
+          ]}
+        >
+          <Text
+            style={[
+              styles.pillText,
+              variant === 'overlay' && styles.pillTextOverlay,
+            ]}
+          >
+            +{validGenres.length - limit}
+          </Text>
         </View>
       )}
     </View>
@@ -60,6 +87,7 @@ const styles = StyleSheet.create({
     gap: 6,
     marginTop: 8,
   },
+  // Default style (light background)
   pill: {
     backgroundColor: '#EDE9FE',
     paddingHorizontal: 10,
@@ -72,5 +100,13 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '500',
     color: '#6D28D9',
+  },
+  // Overlay style (for dark backgrounds)
+  pillOverlay: {
+    backgroundColor: 'rgba(124, 58, 237, 0.9)',
+    borderColor: 'rgba(255, 255, 255, 0.3)',
+  },
+  pillTextOverlay: {
+    color: '#FFFFFF',
   },
 });

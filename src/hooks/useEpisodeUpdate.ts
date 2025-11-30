@@ -33,7 +33,7 @@ export const useEpisodeUpdate = () => {
 
       // If complete, update status and completion date
       if (isComplete) {
-        updateData.status = 'completed';
+        updateData.status = 'Completed';
         updateData.completed_at = new Date().toISOString();
 
         // If this is first completion, set original_completed_at

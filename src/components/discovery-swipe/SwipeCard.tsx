@@ -1,17 +1,6 @@
-import React, { useCallback, useEffect, useMemo, useState, memo } from 'react';
-import { View, Text, Image, StyleSheet, Pressable, ImageBackground, ActivityIndicator } from 'react-native';
-import { PanGestureHandler } from 'react-native-gesture-handler';
-import Animated, {
-  useSharedValue,
-  useAnimatedStyle,
-  withSpring,
-  withTiming,
-  runOnJS,
-  interpolate,
-} from 'react-native-reanimated';
-import type { PanGestureHandlerEventPayload, GestureEvent } from 'react-native-gesture-handler';
+import React, { useCallback, useEffect, useMemo, useState, memo, useRef } from 'react';
+import { View, Text, Image, ImageBackground, StyleSheet, Pressable, PanResponder, Animated, Dimensions } from 'react-native';
 import ReactNativeHapticFeedback from 'react-native-haptic-feedback';
-// import { BlurView } from '@react-native-community/blur'; // Temporarily disabled for performance
 import { GenrePills } from '../common/GenrePills';
 import {
   CARD_WIDTH,
@@ -19,6 +8,8 @@ import {
   SWIPE_THRESHOLD,
   ROTATION_FACTOR,
 } from '../../styles/discoverySwipeStyles';
+
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 interface AnimeCard {
   id: string;
@@ -40,12 +31,22 @@ interface SwipeCardProps {
 type SwipeDirection = 'skip' | 'rate' | 'add' | null;
 
 const SwipeCardComponent = ({ anime, expanded, onSwipe, onPress, onNavigateToDetail }: SwipeCardProps) => {
-  const translateX = useSharedValue(0);
-  const translateY = useSharedValue(0);
   const [showHint, setShowHint] = useState<SwipeDirection>(null);
-  const [imageLoading, setImageLoading] = useState(true);
+  const [debugInfo, setDebugInfo] = useState({ x: 0, y: 0, active: false });
   const posterSource = anime.thumbnail_url ? { uri: anime.thumbnail_url } : null;
   const hasPoster = Boolean(posterSource);
+
+  // Animated position values
+  const pan = useRef(new Animated.ValueXY()).current;
+  const opacity = useRef(new Animated.Value(1)).current;
+
+  // Debug: Track when anime prop changes
+  useEffect(() => {
+    console.log('[SwipeCard] 🎴 Received new anime:', {
+      title: anime.title,
+      id: anime.id,
+    });
+  }, [anime.id]);
 
   const normalizedTags = useMemo(() => {
     const results: string[] = [];
@@ -99,204 +100,292 @@ const SwipeCardComponent = ({ anime, expanded, onSwipe, onPress, onNavigateToDet
     return Array.from(new Set(results.map((tag) => tag.trim()).filter(Boolean))).slice(0, 3);
   }, [anime.tags]);
 
-  useEffect(() => {
-    translateX.value = withSpring(0);
-    translateY.value = withSpring(0);
-  }, [anime.id, translateX, translateY]);
+  // PanResponder for drag gestures
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => {
+        console.log('🟢 [PAN] Touch detected on card!');
+        return true;
+      },
 
-  const triggerHaptic = () => {
-    ReactNativeHapticFeedback.trigger('impactMedium', {
-      enableVibrateFallback: true,
-      ignoreAndroidSystemSettings: false,
-    });
-  };
+      onMoveShouldSetPanResponder: (_, gesture) => {
+        const moved = Math.abs(gesture.dx) > 2 || Math.abs(gesture.dy) > 2;
+        if (moved) {
+          console.log('🟡 [PAN] Movement detected, starting gesture');
+        }
+        return moved;
+      },
 
-  const determineSwipeDirection = (x: number, y: number): SwipeDirection => {
-    const absX = Math.abs(x);
-    const absY = Math.abs(y);
+      onPanResponderGrant: () => {
+        console.log('✅ [PAN] Gesture started!');
+        ReactNativeHapticFeedback.trigger('impactLight');
 
-    if (absY > absX && y > SWIPE_THRESHOLD) {
-      return 'rate';
-    }
+        pan.setOffset({
+          x: pan.x._value,
+          y: pan.y._value,
+        });
+        pan.setValue({ x: 0, y: 0 });
+      },
 
-    if (absX > absY) {
-      if (x < -SWIPE_THRESHOLD) return 'skip';
-      if (x > SWIPE_THRESHOLD) return 'add';
-    }
+      onPanResponderMove: (_, gesture) => {
+        console.log('🔵 [PAN] Dragging:', {
+          x: Math.round(gesture.dx),
+          y: Math.round(gesture.dy),
+          threshold: SWIPE_THRESHOLD,
+        });
 
-    return null;
-  };
+        setDebugInfo({
+          x: Math.round(gesture.dx),
+          y: Math.round(gesture.dy),
+          active: true,
+        });
 
-  const updateHint = useCallback((value: SwipeDirection) => {
-    setShowHint(value);
-  }, []);
+        // Show directional hints
+        if (Math.abs(gesture.dx) > 25) {
+          setShowHint(gesture.dx < 0 ? 'skip' : 'add');
+        } else if (gesture.dy > 25) {
+          setShowHint('rate');
+        } else {
+          setShowHint(null);
+        }
 
-  const animateSwipeOut = (direction: SwipeDirection) => {
-    'worklet';
-    if (direction === 'skip') {
-      translateX.value = withTiming(-CARD_WIDTH * 1.5, { duration: 300 });
-    } else if (direction === 'add') {
-      translateX.value = withTiming(CARD_WIDTH * 1.5, { duration: 300 });
-    } else if (direction === 'rate') {
-      translateY.value = withTiming(CARD_HEIGHT * 1.5, { duration: 300 });
-    }
-  };
+        Animated.event(
+          [null, { dx: pan.x, dy: pan.y }],
+          { useNativeDriver: false }
+        )(_, gesture);
 
-  const gestureHandler = (event: GestureEvent<PanGestureHandlerEventPayload>) => {
-    'worklet';
-    const { translationX, translationY, state } = event.nativeEvent;
+        const distance = Math.sqrt(gesture.dx ** 2 + gesture.dy ** 2);
+        const newOpacity = Math.max(1 - distance / 300, 0.5);
+        opacity.setValue(newOpacity);
+      },
 
-    if (state === 2) {
-      translateX.value = translationX;
-      translateY.value = translationY;
+      onPanResponderRelease: (_, gesture) => {
+        console.log('🔴 [PAN] Released at:', {
+          dx: Math.round(gesture.dx),
+          dy: Math.round(gesture.dy),
+          threshold: SWIPE_THRESHOLD,
+        });
 
-      const absX = Math.abs(translateX.value);
-      const absY = Math.abs(translateY.value);
-      if (absX > SWIPE_THRESHOLD || absY > SWIPE_THRESHOLD) {
-        runOnJS(triggerHaptic)();
-      }
+        pan.flattenOffset();
+        setDebugInfo({ x: 0, y: 0, active: false });
+        setShowHint(null);
 
-      const hint = determineSwipeDirection(translateX.value, translateY.value);
-      runOnJS(updateHint)(hint);
-    } else if (state === 5) {
-      runOnJS(updateHint)(null);
-      const direction = determineSwipeDirection(translateX.value, translateY.value);
+        if (gesture.dx < -SWIPE_THRESHOLD) {
+          console.log('✅ [ACTION] SKIP triggered!');
+          ReactNativeHapticFeedback.trigger('impactMedium');
 
-      if (direction) {
-        runOnJS(triggerHaptic)();
-        animateSwipeOut(direction);
-        runOnJS(onSwipe)(direction);
-      } else {
-        translateX.value = withSpring(0);
-        translateY.value = withSpring(0);
-      }
-    }
-  };
+          Animated.parallel([
+            Animated.timing(pan.x, {
+              toValue: -500,
+              duration: 200,
+              useNativeDriver: false,
+            }),
+            Animated.timing(opacity, {
+              toValue: 0,
+              duration: 200,
+              useNativeDriver: false,
+            }),
+          ]).start(() => {
+            onSwipe('skip');
+            pan.setValue({ x: 0, y: 0 });
+            opacity.setValue(1);
+          });
 
-  const animatedCardStyle = useAnimatedStyle(() => {
-    const rotateZ = interpolate(
-      translateX.value,
-      [-CARD_WIDTH, CARD_WIDTH],
-      [-25, 25]
-    );
+        } else if (gesture.dx > SWIPE_THRESHOLD) {
+          console.log('✅ [ACTION] ADD triggered!');
+          ReactNativeHapticFeedback.trigger('impactMedium');
 
-    const opacity = interpolate(
-      Math.abs(translateX.value) + Math.abs(translateY.value),
-      [0, SWIPE_THRESHOLD * 2],
-      [1, 0.5]
-    );
+          Animated.parallel([
+            Animated.timing(pan.x, {
+              toValue: 500,
+              duration: 200,
+              useNativeDriver: false,
+            }),
+            Animated.timing(opacity, {
+              toValue: 0,
+              duration: 200,
+              useNativeDriver: false,
+            }),
+          ]).start(() => {
+            onSwipe('add');
+            pan.setValue({ x: 0, y: 0 });
+            opacity.setValue(1);
+          });
 
-    return {
-      transform: [
-        { translateX: translateX.value },
-        { translateY: translateY.value },
-        { rotate: `${rotateZ * ROTATION_FACTOR}deg` },
-      ],
-      opacity,
-    };
+        } else if (gesture.dy > SWIPE_THRESHOLD) {
+          console.log('✅ [ACTION] RATE triggered!');
+          ReactNativeHapticFeedback.trigger('impactHeavy');
+
+          // Don't animate card away - just reset position and trigger modal
+          // This keeps the card ready for re-swiping if user cancels the rating
+          Animated.parallel([
+            Animated.spring(pan.x, {
+              toValue: 0,
+              tension: 40,
+              friction: 7,
+              useNativeDriver: false,
+            }),
+            Animated.spring(pan.y, {
+              toValue: 0,
+              tension: 40,
+              friction: 7,
+              useNativeDriver: false,
+            }),
+            Animated.timing(opacity, {
+              toValue: 1,
+              duration: 200,
+              useNativeDriver: false,
+            }),
+          ]).start(() => {
+            // Trigger rate modal after animation completes
+            onSwipe('rate');
+          });
+
+        } else {
+          console.log('❌ [PAN] Below threshold, returning to center');
+          ReactNativeHapticFeedback.trigger('impactLight');
+
+          Animated.parallel([
+            Animated.spring(pan.x, {
+              toValue: 0,
+              tension: 40,
+              friction: 7,
+              useNativeDriver: false,
+            }),
+            Animated.spring(pan.y, {
+              toValue: 0,
+              tension: 40,
+              friction: 7,
+              useNativeDriver: false,
+            }),
+            Animated.timing(opacity, {
+              toValue: 1,
+              duration: 200,
+              useNativeDriver: false,
+            }),
+          ]).start();
+        }
+      },
+
+      onPanResponderTerminate: () => {
+        console.log('⚠️ [PAN] Gesture terminated');
+        Animated.spring(pan, {
+          toValue: { x: 0, y: 0 },
+          useNativeDriver: false,
+        }).start();
+        opacity.setValue(1);
+        setShowHint(null);
+        setDebugInfo({ x: 0, y: 0, active: false });
+      },
+    })
+  ).current;
+
+  // Calculate rotation based on drag
+  const rotate = pan.x.interpolate({
+    inputRange: [-200, 0, 200],
+    outputRange: ['-15deg', '0deg', '15deg'],
+    extrapolate: 'clamp',
   });
 
   return (
     <View style={styles.cardContainer}>
+      {/* Swipe hints - Minimal */}
       {showHint === 'skip' && (
-        <Text style={[styles.swipeHint, styles.swipeHintLeft]}>
-          👋 SKIP
-        </Text>
+        <Text style={styles.swipeHint}>Skip</Text>
       )}
       {showHint === 'rate' && (
-        <Text style={[styles.swipeHint, styles.swipeHintDown]}>
-          ⭐ RATE
-        </Text>
+        <Text style={[styles.swipeHint, styles.swipeHintCenter]}>Rate</Text>
       )}
       {showHint === 'add' && (
-        <Text style={[styles.swipeHint, styles.swipeHintRight]}>
-          ADD ➕
-        </Text>
+        <Text style={[styles.swipeHint, styles.swipeHintRight]}>Add</Text>
       )}
 
-      <PanGestureHandler onGestureEvent={gestureHandler}>
-        <Animated.View style={[styles.wrapper, animatedCardStyle]}>
-          {/* Blurred Background Layer - Simplified for performance */}
-          {hasPoster && (
-            <View style={styles.cardBackdrop}>
-              <ImageBackground
-                source={posterSource}
-                style={styles.blurredBackground}
-                blurRadius={25}
-                resizeMode="cover"
-              >
-                <View style={styles.darkOverlay} />
-              </ImageBackground>
-            </View>
-          )}
-
-          {/* Content Card */}
-          <Pressable
-            onPress={onPress}
-            style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
-          >
+      <Animated.View
+        {...panResponder.panHandlers}
+        style={[
+          styles.card,
+          {
+            transform: [
+              { translateX: pan.x },
+              { translateY: pan.y },
+              { rotate },
+            ],
+            opacity,
+          },
+        ]}
+      >
+        <Pressable onPress={onPress} style={styles.cardContent}>
+          {/* Poster - Clean, no overlays */}
+          <View style={styles.posterContainer}>
             {hasPoster ? (
-              <ImageBackground
+              <Image
                 source={posterSource}
-                style={styles.photo}
-                imageStyle={styles.photoImage}
-              >
-                <View style={styles.photoOverlay} />
-                {normalizedTags.length > 0 && (
-                  <View style={styles.genrePillsOverlay}>
-                    <GenrePills tags={normalizedTags} max={3} />
-                  </View>
-                )}
-                <View style={styles.photoFooter}>
-                  <Text style={styles.photoTitle} numberOfLines={2}>
-                    {anime.title || 'Unknown Title'}
-                  </Text>
-                  {typeof anime.episodes_count === 'number' && anime.episodes_count > 0 && (
-                    <Text style={styles.photoSubtitle}>
-                      {anime.episodes_count} episodes
-                    </Text>
-                  )}
-                </View>
-                {imageLoading && (
-                  <View style={styles.posterSkeleton}>
-                    <ActivityIndicator size="large" color="#7C3AED" />
-                  </View>
-                )}
-                <Image
-                  source={posterSource}
-                  style={{ width: 0, height: 0 }}
-                  onLoadStart={() => setImageLoading(true)}
-                  onLoadEnd={() => setImageLoading(false)}
-                  onError={() => setImageLoading(false)}
-                />
-              </ImageBackground>
+                style={[
+                  styles.poster,
+                  expanded && styles.posterExpanded,
+                ]}
+                resizeMode="cover"
+                onLoad={() => {
+                  console.log('[image] ✅ Loaded successfully:', anime.title);
+                }}
+                onError={(error) => {
+                  console.log('[image] ❌ Error loading:', anime.title, error.nativeEvent.error);
+                }}
+              />
             ) : (
-              <View style={[styles.photo, styles.photoFallback]}>
-                <Text style={styles.photoFallbackText}>No Image</Text>
+              <View style={[styles.poster, styles.posterPlaceholder]}>
+                <Text style={styles.placeholderText}>No Image</Text>
+              </View>
+            )}
+          </View>
+
+          {/* Content area below poster */}
+          <View style={styles.contentArea}>
+            {/* Title */}
+            <Text style={styles.title} numberOfLines={2}>
+              {anime.title || 'Unknown Title'}
+            </Text>
+
+            {/* Genre Pills */}
+            {normalizedTags.length > 0 && (
+              <View style={styles.genrePillsContainer}>
+                <GenrePills tags={normalizedTags} max={3} />
               </View>
             )}
 
-            <View style={styles.metaSection}>
-              {expanded && anime.synopsis && (
-                <View style={styles.synopsisContainer}>
-                  <Text style={styles.synopsisLabel}>Synopsis</Text>
-                  <Text style={styles.synopsisText} numberOfLines={6}>
-                    {anime.synopsis}
+            {/* Episode count */}
+            {typeof anime.episodes_count === 'number' && anime.episodes_count > 0 && (
+              <Text style={styles.episodeText}>
+                {anime.episodes_count} episodes
+              </Text>
+            )}
+
+            {/* Tap hint */}
+            {!expanded && (
+              <Text style={styles.tapHint}>Tap for details</Text>
+            )}
+          </View>
+
+          {/* Expanded synopsis */}
+          {expanded && anime.synopsis && (
+            <View style={styles.synopsisSection}>
+              <Text style={styles.synopsisText} numberOfLines={5}>
+                {anime.synopsis}
+              </Text>
+              {onNavigateToDetail && (
+                <Pressable
+                  onPress={onNavigateToDetail}
+                  style={styles.detailsLink}
+                >
+                  <Text style={styles.detailsLinkText}>
+                    See Full Details
                   </Text>
-                  {onNavigateToDetail && (
-                    <Text
-                      onPress={onNavigateToDetail}
-                      style={styles.seeMoreText}
-                    >
-                      See full details →
-                    </Text>
-                  )}
-                </View>
+                </Pressable>
               )}
             </View>
-          </Pressable>
-        </Animated.View>
-      </PanGestureHandler>
+          )}
+        </Pressable>
+      </Animated.View>
     </View>
   );
 };
@@ -306,157 +395,144 @@ export const SwipeCard = memo(SwipeCardComponent);
 SwipeCard.displayName = 'SwipeCard';
 
 const styles = StyleSheet.create({
+  // Container
   cardContainer: {
-    width: '100%',
+    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 12,
-  },
-  swipeHint: {
-    position: 'absolute',
-    top: -28,
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#E0E7FF',
-    letterSpacing: 1,
-  },
-  swipeHintLeft: {
-    left: 32,
-  },
-  swipeHintRight: {
-    right: 32,
-  },
-  swipeHintDown: {
-    top: undefined,
-    bottom: -28,
-  },
-  wrapper: {
-    width: '100%',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 12,
-  },
-  // Blurred background layer
-  cardBackdrop: {
-    position: 'absolute',
-    width: '88%',
-    maxWidth: 380,
-    height: '100%',
-    borderRadius: 32,
-    overflow: 'hidden',
-  },
-  blurredBackground: {
-    width: '100%',
-    height: '100%',
-  },
-  darkOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0, 0, 0, 0.4)',
-  },
-  card: {
-    width: '88%',
-    maxWidth: 380,
-    borderRadius: 32,
-    backgroundColor: 'rgba(255, 255, 255, 0.92)',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 16 },
-    shadowOpacity: 0.18,
-    shadowRadius: 24,
-    elevation: 12,
-    overflow: 'hidden',
-    borderWidth: 1.5,
-    borderColor: 'rgba(255, 255, 255, 0.8)',
-  },
-  cardPressed: {
-    transform: [{ scale: 0.98 }],
-  },
-  photo: {
-    width: '100%',
-    aspectRatio: 0.72,
-    borderTopLeftRadius: 32,
-    borderTopRightRadius: 32,
-    overflow: 'hidden',
-    backgroundColor: '#0F172A',
-  },
-  photoImage: {
-    borderTopLeftRadius: 32,
-    borderTopRightRadius: 32,
-  },
-  photoOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0, 0, 0, 0.15)',
-  },
-  genrePillsOverlay: {
-    position: 'absolute',
-    top: 16,
-    left: 16,
-    right: 16,
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    zIndex: 10,
-  },
-  photoFooter: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
-    paddingHorizontal: 24,
-    paddingVertical: 20,
-    backgroundColor: 'rgba(0, 0, 0, 0.35)',
-  },
-  photoTitle: {
-    fontSize: 22,
-    fontWeight: '700',
-    color: '#FFFFFF',
-  },
-  photoSubtitle: {
-    marginTop: 4,
-    fontSize: 13,
-    color: 'rgba(255, 255, 255, 0.85)',
-  },
-  photoFallback: {
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  photoFallbackText: {
-    color: '#E2E8F0',
-    fontWeight: '600',
-  },
-  posterSkeleton: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: '#F1F5F9',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  metaSection: {
     paddingHorizontal: 20,
-    paddingVertical: 18,
+    paddingVertical: 20,
   },
-  genresRow: {
-    marginBottom: 12,
+
+  // Card - Clean white, subtle shadow
+  card: {
+    width: SCREEN_WIDTH - 40,
+    maxWidth: 500,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    overflow: 'hidden',
+
+    // Apple-style subtle shadow
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 4,
   },
-  synopsisContainer: {
+
+  cardContent: {
     width: '100%',
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    borderRadius: 18,
-    backgroundColor: '#F1F5F9',
   },
-  synopsisLabel: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#111827',
+
+  // Poster - Clean, no overlays
+  posterContainer: {
+    width: '100%',
+    backgroundColor: '#F5F5F7',
+  },
+
+  poster: {
+    width: '100%',
+    height: SCREEN_HEIGHT * 0.58,
+    backgroundColor: '#F5F5F7',
+  },
+
+  posterExpanded: {
+    height: SCREEN_HEIGHT * 0.45,
+  },
+
+  posterPlaceholder: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  placeholderText: {
+    fontSize: 15,
+    color: '#86868B',
+  },
+
+  // Content area - Generous padding
+  contentArea: {
+    padding: 20,
+    paddingTop: 16,
+  },
+
+  // Title - SF Pro Display style
+  title: {
+    fontSize: 24,
+    fontWeight: '600',
+    color: '#1D1D1F',
+    lineHeight: 30,
+    letterSpacing: -0.5,
     marginBottom: 6,
   },
-  synopsisText: {
-    fontSize: 13,
-    lineHeight: 18,
-    color: '#4B5563',
+
+  // Genre pills container
+  genrePillsContainer: {
+    marginBottom: 4,
   },
-  seeMoreText: {
-    marginTop: 6,
+
+  // Episode count
+  episodeText: {
     fontSize: 13,
+    color: '#86868B',
+    marginTop: 6,
+  },
+
+  // Tap hint
+  tapHint: {
+    fontSize: 13,
+    color: '#007AFF',
+    marginTop: 12,
+  },
+
+  // Synopsis section
+  synopsisSection: {
+    paddingHorizontal: 20,
+    paddingBottom: 20,
+    paddingTop: 8,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: '#E5E5EA',
+  },
+
+  synopsisText: {
+    fontSize: 15,
+    color: '#1D1D1F',
+    lineHeight: 22,
+    letterSpacing: -0.2,
+  },
+
+  // Details link
+  detailsLink: {
+    marginTop: 12,
+    alignSelf: 'flex-start',
+  },
+
+  detailsLinkText: {
+    fontSize: 15,
+    color: '#007AFF',
+    fontWeight: '500',
+  },
+
+  // Swipe hints - Minimal
+  swipeHint: {
+    position: 'absolute',
+    left: 40,
+    top: '50%',
+    fontSize: 20,
     fontWeight: '600',
-    color: '#7C3AED',
+    color: '#86868B',
+    opacity: 0.6,
+    zIndex: 100,
+  },
+
+  swipeHintCenter: {
+    left: '50%',
+    marginLeft: -30,
+    top: '40%',
+  },
+
+  swipeHintRight: {
+    left: undefined,
+    right: 40,
   },
 });

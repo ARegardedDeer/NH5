@@ -1,12 +1,25 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Text, ScrollView, FlatList } from 'react-native';
 import { rails, featuredLists } from './mockData';
 import { CollectionCard } from './components/CollectionCard';
 import { FeaturedListCard } from './components/FeaturedListCard';
 import { theme } from '../../ui/theme';
 import MaterialIcon from 'react-native-vector-icons/MaterialIcons';
+import { ContinueWatchingSection } from '../../components/continue-watching/ContinueWatchingSection';
+import { supabase, whenAuthed } from '../../db/supabaseClient';
 
 export default function HomeScreen() {
+  const [userId, setUserId] = useState<string | null>(null);
+  const [authReady, setAuthReady] = useState(false);
+
+  useEffect(() => {
+    whenAuthed.then(async () => {
+      const { data } = await supabase.auth.getUser();
+      setUserId(data?.user?.id ?? null);
+      setAuthReady(true);
+    });
+  }, []);
+
   return (
     <View style={{ flex:1, backgroundColor: theme.colors.bgDark }}>
       {/* Sticky header */}
@@ -19,6 +32,13 @@ export default function HomeScreen() {
       </View>
 
       <ScrollView contentContainerStyle={{ paddingBottom: 80 }}>
+        {/* Continue Watching rail (live data) */}
+        {authReady && userId && (
+          <View style={{ paddingHorizontal: 16, paddingTop: 6, paddingBottom: 2 }}>
+            <ContinueWatchingSection userId={userId} limit={3} />
+          </View>
+        )}
+
         <View style={{ paddingHorizontal:16, paddingTop:6, paddingBottom:8 }}>
           <Text style={{ color: theme.colors.text, fontWeight:'800', fontSize:22 }}>✨ Smart Collections</Text>
         </View>

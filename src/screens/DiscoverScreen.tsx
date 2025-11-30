@@ -12,6 +12,7 @@ import { supabase, whenAuthed } from '../db/supabaseClient';
 import { currentTheme, spacing } from '../styles/discoverStyles';
 import { SearchBar } from '../components/discover/SearchBar';
 import { StaffPicksSection } from '../components/discover/StaffPicksSection';
+import { TrendingSection } from '../components/discover/TrendingSection';
 import { BecauseYouWatchedSection } from '../components/discover/BecauseYouWatchedSection';
 import { RatingCTACard } from '../components/discover/RatingCTACard';
 import { GenrePillsSection } from '../components/discover/GenrePillsSection';
@@ -96,6 +97,9 @@ export function DiscoverScreen() {
 
           {/* Staff Picks */}
           <StaffPicksSection onAnimePress={handleAnimePress} />
+
+          {/* Trending Now */}
+          <TrendingSection onAnimePress={(anime) => handleAnimePress(anime.id)} />
 
           {/* Because You Watched (conditional) */}
           {hasRatings && userId && (

@@ -12,3 +12,6 @@ build/
 
 # Dev-only auth credentials
 src/dev/devAuth.ts
+
+# MCP configuration with database credentials
+.mcp.json

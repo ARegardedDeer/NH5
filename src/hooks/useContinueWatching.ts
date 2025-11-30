@@ -4,7 +4,7 @@ import { supabase } from '../db/supabaseClient';
 interface ContinueWatchingItem {
   user_id: string;
   anime_id: string;
-  status: 'watching' | 'rewatching';
+  status: 'Watching' | 'Rewatching';
   current_episode: number;
   total_episodes: number | null;
   last_watched_at: string;
@@ -60,7 +60,7 @@ export const useContinueWatching = (options?: UseContinueWatchingOptions) => {
           )
         `)
         .eq('user_id', userId)
-        .in('status', ['watching', 'rewatching'])
+        .in('status', ['Watching', 'Rewatching'])
         .order('last_watched_at', { ascending: false });
 
       // Apply limit if specified (for Home tab)

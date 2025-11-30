@@ -134,17 +134,23 @@ export function useDiscoveryQueue(userId: string): UseDiscoveryQueueResult {
         throw error;
       }
     },
-    onSuccess: () => {
-      // Invalidate queue to potentially refetch
-      queryClient.invalidateQueries({ queryKey: ['discovery-queue', userId] });
-    },
+    // Don't invalidate query on every swipe - let the queue advance naturally
+    // Query will only refetch when queue is exhausted (see handleSwipe)
   });
 
   const handleSwipe = async (action: 'skip' | 'rate' | 'add') => {
     const currentCard = queue[currentIndex];
-    if (!currentCard) return;
+    if (!currentCard) {
+      console.log('[useDiscoveryQueue] ❌ No current card at index:', currentIndex);
+      return;
+    }
 
-    console.log('[useDiscoveryQueue] Handling swipe:', action, currentCard.title);
+    console.log('[useDiscoveryQueue] 🎯 Handling swipe:', {
+      action,
+      title: currentCard.title,
+      currentIndex,
+      queueLength: queue.length,
+    });
 
     // Record the action
     await recordSwipeMutation.mutateAsync({
@@ -154,19 +160,31 @@ export function useDiscoveryQueue(userId: string): UseDiscoveryQueueResult {
 
     // Navigate to next card (special handling for 'rate' action)
     if (action === 'rate') {
-      // For rate action, the modal will handle navigation to AnimeDetail
-      // and the parent will close the swipe modal
-      console.log('[useDiscoveryQueue] Rate action - parent will handle navigation');
+      // For rate action, advance to next card after rating is submitted
+      const nextIndex = currentIndex + 1;
+      console.log('[useDiscoveryQueue] ⭐ Rate action - advancing to index:', nextIndex);
+
+      if (nextIndex < queue.length) {
+        setCurrentIndex(nextIndex);
+        console.log('[useDiscoveryQueue] ✅ Moved to next card');
+      } else {
+        console.log('[useDiscoveryQueue] 🔄 Queue exhausted after rate, refetching...');
+        refetch();
+      }
       return;
     }
 
     // For skip and add, move to next card
     const nextIndex = currentIndex + 1;
+    console.log('[useDiscoveryQueue] ➡️ Advancing from index', currentIndex, 'to', nextIndex);
+
     if (nextIndex < queue.length) {
       setCurrentIndex(nextIndex);
+      console.log('[useDiscoveryQueue] ✅ Set currentIndex to:', nextIndex);
+      console.log('[useDiscoveryQueue] 📋 Next card will be:', queue[nextIndex]?.title);
     } else {
       // Queue exhausted, refetch
-      console.log('[useDiscoveryQueue] Queue exhausted, refetching...');
+      console.log('[useDiscoveryQueue] 🔄 Queue exhausted, refetching...');
       refetch();
     }
   };

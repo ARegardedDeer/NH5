@@ -94,7 +94,7 @@ export function RatingModal({
             style={styles.slider}
             minimumValue={1}
             maximumValue={10}
-            step={0.5}
+            step={0.1}
             value={rating}
             onValueChange={handleValueChange}
             minimumTrackTintColor={currentTheme.primary}

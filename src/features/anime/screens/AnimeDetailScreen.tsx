@@ -314,26 +314,25 @@ export default function AnimeDetailScreen() {
         updated_at: now,
       };
 
-      // Add episode tracking columns based on status (normalize UI labels to db values)
-      const normalizedStatus = String(nextStatus).toLowerCase().replace(/\s+/g, '_');
-
-      if (normalizedStatus === 'watching') {
+      // Add episode tracking columns based on status
+      // Status values must match DB constraint: 'Watching', 'Plan to Watch', 'Completed', 'On Hold', 'Dropped'
+      if (nextStatus === 'Watching') {
         payload.current_episode = 1;
         payload.total_episodes = episodesCount;
         payload.started_at = now;
         payload.last_watched_at = now;
-      } else if (normalizedStatus === 'plan_to_watch') {
+      } else if (nextStatus === 'Plan to Watch') {
         payload.current_episode = 0;
         payload.total_episodes = episodesCount;
         payload.started_at = null;
         payload.last_watched_at = null;
-      } else if (normalizedStatus === 'completed') {
+      } else if (nextStatus === 'Completed') {
         payload.current_episode = episodesCount ?? 0;
         payload.total_episodes = episodesCount;
         payload.completed_at = now;
         payload.original_completed_at = now;
         payload.last_watched_at = now;
-      } else if (normalizedStatus === 'on_hold' || normalizedStatus === 'dropped') {
+      } else if (nextStatus === 'On Hold' || nextStatus === 'Dropped') {
         // Keep existing current_episode - only update timestamp
         payload.last_watched_at = now;
       }

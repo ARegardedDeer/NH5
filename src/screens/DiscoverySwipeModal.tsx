@@ -117,7 +117,7 @@ export function DiscoverySwipeModal({ visible, onClose }: DiscoverySwipeModalPro
       .upsert({
         user_id: userId,
         anime_id: currentCard.id,
-        status: 'plan_to_watch',
+        status: 'Plan to Watch',
         bookmarked: false,
         current_episode: 0,
         total_episodes: null, // Will be set properly when they start watching
@@ -127,9 +127,23 @@ export function DiscoverySwipeModal({ visible, onClose }: DiscoverySwipeModalPro
       }, { onConflict: 'user_id,anime_id' });
 
     if (error) {
-      console.error('[discovery-swipe] Add to list error:', error);
+      console.error('[discovery-swipe] ❌ Add to list FAILED');
+      console.error('[discovery-swipe] Error object:', error);
+      console.error('[discovery-swipe] Error message:', error?.message);
+      console.error('[discovery-swipe] Error details:', JSON.stringify(error, null, 2));
+      console.error('[discovery-swipe] Attempted with params:', {
+        userId,
+        animeId: currentCard.id,
+        animeTitle: currentCard.title,
+        status: 'Plan to Watch',
+      });
     } else {
-      console.log('[discovery-swipe] Added to Plan to Watch successfully');
+      console.log('[discovery-swipe] ✅ Added to Plan to Watch successfully');
+      console.log('[discovery-swipe] Success params:', {
+        userId,
+        animeId: currentCard.id,
+        animeTitle: currentCard.title,
+      });
     }
 
     // Record swipe action and move to next card

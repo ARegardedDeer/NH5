@@ -1,27 +1,6 @@
 import { supabase } from '../db/supabaseClient';
 
-export type ListStatus = 'watching' | 'plan_to_watch' | 'completed' | 'on_hold' | 'dropped' | 'rewatching';
-
-/**
- * Convert UI status labels to database status values
- * Maps "Watching" → "watching", "Plan to Watch" → "plan_to_watch", etc.
- */
-export function normalizeStatusToDb(uiStatus: string | null): ListStatus | null {
-  if (!uiStatus) return null;
-
-  const normalized = uiStatus.trim().toLowerCase().replace(/\s+/g, '_');
-
-  const statusMap: Record<string, ListStatus> = {
-    'watching': 'watching',
-    'plan_to_watch': 'plan_to_watch',
-    'completed': 'completed',
-    'on_hold': 'on_hold',
-    'dropped': 'dropped',
-    'rewatching': 'rewatching',
-  };
-
-  return statusMap[normalized] || null;
-}
+export type ListStatus = 'Watching' | 'Plan to Watch' | 'Completed' | 'On Hold' | 'Dropped' | 'Rewatching';
 
 interface AddToListParams {
   userId: string;
@@ -50,7 +29,7 @@ export function buildListItemData(params: AddToListParams) {
   const now = new Date().toISOString();
 
   switch (status) {
-    case 'watching':
+    case 'Watching':
       return {
         ...baseData,
         current_episode: currentEpisode ?? 1,
@@ -59,7 +38,7 @@ export function buildListItemData(params: AddToListParams) {
         last_watched_at: now,
       };
 
-    case 'rewatching':
+    case 'Rewatching':
       return {
         ...baseData,
         current_episode: currentEpisode ?? 1,
@@ -68,7 +47,7 @@ export function buildListItemData(params: AddToListParams) {
         last_watched_at: now,
       };
 
-    case 'plan_to_watch':
+    case 'Plan to Watch':
       return {
         ...baseData,
         current_episode: 0,
@@ -77,7 +56,7 @@ export function buildListItemData(params: AddToListParams) {
         last_watched_at: null,
       };
 
-    case 'completed':
+    case 'Completed':
       return {
         ...baseData,
         current_episode: episodesCount ?? 0,
@@ -87,8 +66,8 @@ export function buildListItemData(params: AddToListParams) {
         last_watched_at: now,
       };
 
-    case 'on_hold':
-    case 'dropped':
+    case 'On Hold':
+    case 'Dropped':
       // Preserve existing current_episode (don't reset)
       return {
         ...baseData,
