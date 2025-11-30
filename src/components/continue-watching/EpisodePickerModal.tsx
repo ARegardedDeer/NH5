@@ -42,12 +42,14 @@ export const EpisodePickerModal: React.FC<EpisodePickerModalProps> = (props) => 
   const [selectedEpisode, setSelectedEpisode] = useState<number>(currentEpisode);
   const [isEditingInline, setIsEditingInline] = useState(false);
   const [inlineEpisode, setInlineEpisode] = useState(currentEpisode.toString());
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
 
   useEffect(() => {
     if (visible) {
       setSelectedEpisode(currentEpisode);
       setInlineEpisode(currentEpisode.toString());
       setIsEditingInline(false);
+      setHasUnsavedChanges(false);
     }
   }, [visible, currentEpisode]);
 
@@ -112,6 +114,7 @@ export const EpisodePickerModal: React.FC<EpisodePickerModalProps> = (props) => 
       },
       {
         onSuccess: (data) => {
+          setHasUnsavedChanges(false);
           if (data.isComplete) {
             onComplete?.(animeId);
           }
@@ -119,6 +122,31 @@ export const EpisodePickerModal: React.FC<EpisodePickerModalProps> = (props) => 
         },
       },
     );
+  };
+
+  const handleClose = () => {
+    if (hasUnsavedChanges) {
+      Alert.alert(
+        'Unsaved Changes',
+        'You have unsaved episode changes. Discard them?',
+        [
+          { text: 'Keep Editing', style: 'cancel' },
+          {
+            text: 'Discard',
+            style: 'destructive',
+            onPress: () => {
+              setHasUnsavedChanges(false);
+              setSelectedEpisode(currentEpisode);
+              setInlineEpisode(currentEpisode.toString());
+              setIsEditingInline(false);
+              onClose();
+            },
+          },
+        ]
+      );
+    } else {
+      onClose();
+    }
   };
 
   const handleConfirm = () => {
@@ -157,12 +185,12 @@ export const EpisodePickerModal: React.FC<EpisodePickerModalProps> = (props) => 
   const progressPercentage = totalEpisodes ? Math.min((currentEpisode / totalEpisodes) * 100, 100) : 0;
 
   return (
-    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
+    <Modal visible={visible} animationType="slide" transparent onRequestClose={handleClose}>
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.modalOverlay}
       >
-        <Pressable style={styles.backdrop} onPress={onClose} />
+        <Pressable style={styles.backdrop} onPress={handleClose} />
 
         <View style={styles.modalContent}>
           {/* Drag Handle (iOS standard) */}
@@ -183,9 +211,16 @@ export const EpisodePickerModal: React.FC<EpisodePickerModalProps> = (props) => 
             <View style={styles.episodeInputContainer}>
               {isEditingInline ? (
                 <TextInput
-                  style={styles.inlineEpisodeInput}
+                  style={[
+                    styles.inlineEpisodeInput,
+                    hasUnsavedChanges && styles.inlineEpisodeInputModified,
+                  ]}
                   value={inlineEpisode}
-                  onChangeText={setInlineEpisode}
+                  onChangeText={(value) => {
+                    setInlineEpisode(value);
+                    const parsed = parseInt(value);
+                    setHasUnsavedChanges(!isNaN(parsed) && parsed !== currentEpisode);
+                  }}
                   keyboardType="number-pad"
                   autoFocus
                   selectTextOnFocus
@@ -193,7 +228,12 @@ export const EpisodePickerModal: React.FC<EpisodePickerModalProps> = (props) => 
                   onBlur={handleInlineBlur}
                 />
               ) : (
-                <Text style={styles.currentValue}>
+                <Text
+                  style={[
+                    styles.currentValue,
+                    hasUnsavedChanges && styles.currentValueModified,
+                  ]}
+                >
                   {selectedEpisode}
                 </Text>
               )}
@@ -232,6 +272,7 @@ export const EpisodePickerModal: React.FC<EpisodePickerModalProps> = (props) => 
                 onValueChange={(value) => {
                   setSelectedEpisode(Number(value));
                   setInlineEpisode(value.toString());
+                  setHasUnsavedChanges(Number(value) !== currentEpisode);
                 }}
                 itemStyle={styles.pickerItem}
               >
@@ -248,17 +289,25 @@ export const EpisodePickerModal: React.FC<EpisodePickerModalProps> = (props) => 
 
           {/* Action Buttons */}
           <View style={styles.buttons}>
-            <Pressable style={[styles.button, styles.cancelButton]} onPress={onClose}>
+            <Pressable style={[styles.button, styles.cancelButton]} onPress={handleClose}>
               <Text style={styles.cancelButtonText}>Cancel</Text>
             </Pressable>
 
             <Pressable
-              style={[styles.button, styles.confirmButton]}
+              style={[
+                styles.button,
+                styles.confirmButton,
+                hasUnsavedChanges && styles.confirmButtonHighlighted,
+              ]}
               onPress={handleConfirm}
               disabled={updateEpisode.isPending}
             >
               <Text style={styles.confirmButtonText}>
-                {updateEpisode.isPending ? 'Updating...' : 'Confirm'}
+                {updateEpisode.isPending
+                  ? 'Updating...'
+                  : hasUnsavedChanges
+                  ? 'Save Changes'
+                  : 'Confirm'}
               </Text>
             </Pressable>
           </View>
@@ -333,6 +382,9 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#7C3AED',
   },
+  currentValueModified: {
+    color: '#F59E0B', // Orange/Amber (unsaved changes)
+  },
   inlineEpisodeInput: {
     fontSize: 20,
     fontWeight: '700',
@@ -345,6 +397,10 @@ const styles = StyleSheet.create({
     borderColor: '#7C3AED',
     minWidth: 50,
     textAlign: 'center',
+  },
+  inlineEpisodeInputModified: {
+    color: '#F59E0B', // Orange/Amber
+    borderColor: '#F59E0B', // Match border color
   },
   totalEpisodes: {
     fontSize: 20,
@@ -436,6 +492,9 @@ const styles = StyleSheet.create({
   },
   confirmButton: {
     backgroundColor: '#7C3AED',
+  },
+  confirmButtonHighlighted: {
+    backgroundColor: '#F59E0B', // Orange to draw attention to unsaved changes
   },
   confirmButtonText: {
     fontSize: 17,
