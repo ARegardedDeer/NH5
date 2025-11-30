@@ -13,6 +13,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 // @ts-ignore - Icon library type definitions
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { useNavigation } from '@react-navigation/native';
+import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../db/supabaseClient';
 import { useDiscoveryQueue } from '../hooks/useDiscoveryQueue';
 import { SwipeCard } from '../components/discovery-swipe/SwipeCard';
@@ -27,6 +28,7 @@ interface DiscoverySwipeModalProps {
 
 export function DiscoverySwipeModal({ visible, onClose }: DiscoverySwipeModalProps) {
   const navigation = useNavigation<any>();
+  const queryClient = useQueryClient();
   const [userId, setUserId] = useState<string | null>(null);
   const [showRatingModal, setShowRatingModal] = useState(false);
   const [expandedCard, setExpandedCard] = useState(false);
@@ -144,6 +146,13 @@ export function DiscoverySwipeModal({ visible, onClose }: DiscoverySwipeModalPro
         animeId: currentCard.id,
         animeTitle: currentCard.title,
       });
+
+      // Invalidate continue watching cache
+      console.log('[discovery-swipe] 🔄 Invalidating continue-watching cache...');
+      queryClient.invalidateQueries({
+        queryKey: ['continue-watching', userId],
+      });
+      console.log('[discovery-swipe] ✅ Cache invalidated');
     }
 
     // Record swipe action and move to next card

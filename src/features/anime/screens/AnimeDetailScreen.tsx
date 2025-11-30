@@ -16,6 +16,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRoute } from '@react-navigation/native';
+import { useQueryClient } from '@tanstack/react-query';
 import { useAnimeById } from '../hooks/useAnimeById';
 import { theme } from '../../../ui/theme';
 import { supabase, whenAuthed } from '../../../db/supabaseClient';
@@ -70,6 +71,7 @@ export default function AnimeDetailScreen() {
 
   const { data, isLoading, error } = useAnimeById(id);
   const toast = useToast();
+  const queryClient = useQueryClient();
 
   const [bookmarked, setBookmarked] = useState(false);
   const [status, setStatus] = useState<StatusOption | null>(null);
@@ -378,6 +380,13 @@ export default function AnimeDetailScreen() {
         console.log('[anime] ✅ Total episodes:', data.total_episodes);
         console.log('[anime] ✅ Bookmarked:', data.bookmarked);
 
+        // Invalidate continue watching cache to refresh UI
+        console.log('[anime] 🔄 Invalidating continue-watching cache...');
+        queryClient.invalidateQueries({
+          queryKey: ['continue-watching', userId],
+        });
+        console.log('[anime] ✅ Cache invalidated');
+
         return true;
       } catch (error) {
         console.error('[anime] 💥 persistUserList EXCEPTION:', error);
@@ -385,7 +394,7 @@ export default function AnimeDetailScreen() {
         return false;
       }
     },
-    []
+    [queryClient]
   );
 
   const onSetEleven = useCallback(async () => {

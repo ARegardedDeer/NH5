@@ -34,11 +34,13 @@ export const useContinueWatching = (options?: UseContinueWatchingOptions) => {
     queryKey: ['continue-watching', userId, limit],
     queryFn: async () => {
       if (!userId) {
-        console.log('[useContinueWatching] No userId provided, returning empty array');
+        console.log('[useContinueWatching] ❌ No userId provided, returning empty array');
         return [];
       }
 
-      console.log(`[useContinueWatching] Fetching continue watching (limit: ${limit || 'all'})`);
+      console.log('[useContinueWatching] 🔄 START QUERY');
+      console.log('[useContinueWatching] userId:', userId);
+      console.log('[useContinueWatching] limit:', limit || 'all');
 
       let query = supabase
         .from('user_lists')
@@ -61,27 +63,47 @@ export const useContinueWatching = (options?: UseContinueWatchingOptions) => {
         `)
         .eq('user_id', userId)
         .in('status', ['Watching', 'Rewatching'])
-        .order('last_watched_at', { ascending: false });
+        .order('last_watched_at', { ascending: false, nullsFirst: false });
 
       // Apply limit if specified (for Home tab)
       if (limit !== undefined) {
         query = query.limit(limit);
       }
 
+      console.log('[useContinueWatching] 📡 Executing Supabase query...');
+
       const { data, error } = await query;
 
+      console.log('[useContinueWatching] 📊 Query response:', {
+        dataLength: data?.length,
+        hasError: !!error,
+      });
+
       if (error) {
-        console.error('[useContinueWatching] Error:', error);
+        console.error('[useContinueWatching] ❌ Query error:', error);
+        console.error('[useContinueWatching] ❌ Error message:', error?.message);
+        console.error('[useContinueWatching] ❌ Error details:', JSON.stringify(error, null, 2));
         throw error;
       }
 
+      console.log('[useContinueWatching] ✅ Raw data sample:', data?.[0] ? JSON.stringify(data[0], null, 2) : 'No data');
       console.log(`[useContinueWatching] Fetched ${data?.length || 0} items`);
 
       // Transform the data to ensure anime is an object, not an array
-      const transformedData = (data || []).map((item: any) => ({
-        ...item,
-        anime: Array.isArray(item.anime) ? item.anime[0] : item.anime,
-      }));
+      const transformedData = (data || []).map((item: any) => {
+        const anime = Array.isArray(item.anime) ? item.anime[0] : item.anime;
+        console.log('[useContinueWatching] 🔄 Transforming item:', {
+          animeId: item.anime_id,
+          animeIsArray: Array.isArray(item.anime),
+          animeTitle: anime?.title,
+        });
+        return {
+          ...item,
+          anime,
+        };
+      });
+
+      console.log('[useContinueWatching] ✅ Transformed data length:', transformedData.length);
 
       return transformedData as ContinueWatchingItem[];
     },
