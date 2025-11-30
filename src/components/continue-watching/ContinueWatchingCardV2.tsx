@@ -36,25 +36,29 @@ export const ContinueWatchingCardV2: React.FC<ContinueWatchingCardV2Props> = ({
   const [showOverlay, setShowOverlay] = useState(false);
   const overlayTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const isMovie = totalEpisodes === 1;
-  const isCompleted = isMovie && currentEpisode >= 1;
+  const isSingleEpisode = totalEpisodes === 1;
+  const isCompleted = status === 'Completed';
 
   const progress = useMemo(() => {
+    // Hide progress bar for single-episode anime
+    if (isSingleEpisode) return null;
     if (!totalEpisodes || totalEpisodes <= 0) return null;
     return Math.min(100, Math.max(0, (currentEpisode / totalEpisodes) * 100));
-  }, [currentEpisode, totalEpisodes]);
+  }, [currentEpisode, totalEpisodes, isSingleEpisode]);
 
   const episodeLabel = useMemo(() => {
+    // Hide episode count for single-episode anime
+    if (isSingleEpisode) return null;
     if (totalEpisodes) return `Ep ${currentEpisode} / ${totalEpisodes}`;
     return `Ep ${currentEpisode}`;
-  }, [currentEpisode, totalEpisodes]);
+  }, [currentEpisode, totalEpisodes, isSingleEpisode]);
 
   const ctaLabel = useMemo(() => {
-    if (isMovie) {
-      return isCompleted ? 'Completed' : 'Mark Complete';
+    if (isSingleEpisode) {
+      return isCompleted ? 'Watched' : 'Done!';
     }
     return 'Update';
-  }, [isMovie, isCompleted]);
+  }, [isSingleEpisode, isCompleted]);
 
   const handleInfoPress = () => {
     navigateToAnimeDetail(navigation, anime.id, anime.title);
@@ -114,7 +118,9 @@ export const ContinueWatchingCardV2: React.FC<ContinueWatchingCardV2Props> = ({
               <Text style={styles.overlayTitle} numberOfLines={2}>
                 {anime.title}
               </Text>
-              <Text style={styles.overlayEpisode}>{episodeLabel}</Text>
+              {episodeLabel && (
+                <Text style={styles.overlayEpisode}>{episodeLabel}</Text>
+              )}
             </View>
           </Pressable>
         )}
@@ -138,7 +144,10 @@ export const ContinueWatchingCardV2: React.FC<ContinueWatchingCardV2Props> = ({
         )}
 
         <Pressable
-          style={[styles.ctaButton, isCompleted && styles.ctaButtonDisabled]}
+          style={[
+            styles.ctaButton,
+            isCompleted && (isSingleEpisode ? styles.ctaButtonCompleted : styles.ctaButtonDisabled)
+          ]}
           onPress={(e) => {
             e.stopPropagation();
             if (!isCompleted) {
@@ -147,7 +156,7 @@ export const ContinueWatchingCardV2: React.FC<ContinueWatchingCardV2Props> = ({
           }}
           disabled={isCompleted}
         >
-          <Text style={[styles.ctaText, isCompleted && styles.ctaTextDisabled]}>
+          <Text style={[styles.ctaText, isCompleted && styles.ctaTextCompleted]}>
             {ctaLabel}
           </Text>
         </Pressable>
@@ -250,13 +259,17 @@ const styles = StyleSheet.create({
   ctaButtonDisabled: {
     backgroundColor: '#E5E7EB',
   },
+  ctaButtonCompleted: {
+    backgroundColor: '#4CAF50',
+    opacity: 0.85,
+  },
   ctaText: {
     color: '#FFFFFF',
     fontWeight: '700',
     fontSize: 14,
   },
-  ctaTextDisabled: {
-    color: '#9CA3AF',
+  ctaTextCompleted: {
+    color: '#FFFFFF',
   },
 });
 

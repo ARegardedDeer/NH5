@@ -44,6 +44,8 @@ export const EpisodePickerModal: React.FC<EpisodePickerModalProps> = (props) => 
   const [inlineEpisode, setInlineEpisode] = useState(currentEpisode.toString());
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
 
+  const isSingleEpisode = totalEpisodes === 1;
+
   useEffect(() => {
     if (visible) {
       setSelectedEpisode(currentEpisode);
@@ -124,6 +126,11 @@ export const EpisodePickerModal: React.FC<EpisodePickerModalProps> = (props) => 
     );
   };
 
+  const handleMarkWatched = () => {
+    // For single-episode anime, mark as watched (episode 1)
+    performUpdate(1);
+  };
+
   const handleClose = () => {
     if (hasUnsavedChanges) {
       Alert.alert(
@@ -198,14 +205,40 @@ export const EpisodePickerModal: React.FC<EpisodePickerModalProps> = (props) => 
 
           {/* Header */}
           <View style={styles.header}>
-            <Text style={styles.title}>Update Progress</Text>
+            <Text style={styles.title}>
+              {isSingleEpisode ? 'Mark as Watched' : 'Update Progress'}
+            </Text>
             <Text style={styles.animeTitle} numberOfLines={1}>
               {animeTitle}
             </Text>
           </View>
 
-          {/* Current Episode - Inline Editable */}
-          <View style={styles.currentProgress}>
+          {isSingleEpisode ? (
+            /* Simplified UI for movies/OVAs */
+            <>
+              <Text style={styles.singleEpisodePrompt}>
+                Ready to mark this as watched?
+              </Text>
+
+              <Pressable
+                style={styles.markWatchedButton}
+                onPress={handleMarkWatched}
+                disabled={updateEpisode.isPending}
+              >
+                <Text style={styles.markWatchedButtonText}>
+                  {updateEpisode.isPending ? 'Updating...' : '✓ Mark as Watched'}
+                </Text>
+              </Pressable>
+
+              <Pressable style={styles.simpleCancelButton} onPress={handleClose}>
+                <Text style={styles.simpleCancelButtonText}>Cancel</Text>
+              </Pressable>
+            </>
+          ) : (
+            /* Regular UI for series */
+            <>
+              {/* Current Episode - Inline Editable */}
+              <View style={styles.currentProgress}>
             <Text style={styles.currentLabel}>Current Episode:</Text>
 
             <View style={styles.episodeInputContainer}>
@@ -311,6 +344,8 @@ export const EpisodePickerModal: React.FC<EpisodePickerModalProps> = (props) => 
               </Text>
             </Pressable>
           </View>
+            </>
+          )}
         </View>
       </KeyboardAvoidingView>
     </Modal>
@@ -500,5 +535,35 @@ const styles = StyleSheet.create({
     fontSize: 17,
     fontWeight: '600',
     color: '#FFFFFF',
+  },
+  singleEpisodePrompt: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#1D1D1F',
+    textAlign: 'center',
+    marginBottom: 32,
+    marginTop: 16,
+  },
+  markWatchedButton: {
+    backgroundColor: '#7C3AED',
+    paddingVertical: 16,
+    paddingHorizontal: 32,
+    borderRadius: 12,
+    marginBottom: 16,
+  },
+  markWatchedButtonText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    textAlign: 'center',
+  },
+  simpleCancelButton: {
+    paddingVertical: 12,
+  },
+  simpleCancelButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#7C3AED',
+    textAlign: 'center',
   },
 });
