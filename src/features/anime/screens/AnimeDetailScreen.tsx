@@ -75,7 +75,6 @@ export default function AnimeDetailScreen() {
   const [status, setStatus] = useState<StatusOption | null>(null);
   const [statusMenuOpen, setStatusMenuOpen] = useState(false);
   const [isStoryExpanded, setIsStoryExpanded] = useState(false);
-  const [hasUserListsTable, setHasUserListsTable] = useState(false);
   const [authReady, setAuthReady] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
   const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
@@ -298,11 +297,10 @@ export default function AnimeDetailScreen() {
         animeId,
         nextStatus,
         nextBookmarked,
-        hasUserListsTable,
       });
 
-      if (!hasUserListsTable || !userId) {
-        console.warn('[anime] ⚠️ Aborting: hasUserListsTable=', hasUserListsTable, 'userId=', userId ?? 'null');
+      if (!userId) {
+        console.warn('[anime] ⚠️ Aborting: userId is required');
         return false;
       }
 
@@ -387,7 +385,7 @@ export default function AnimeDetailScreen() {
         return false;
       }
     },
-    [hasUserListsTable]
+    []
   );
 
   const onSetEleven = useCallback(async () => {
