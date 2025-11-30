@@ -9,6 +9,7 @@ import {
   Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 // @ts-ignore - Icon library type definitions
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { useNavigation } from '@react-navigation/native';
@@ -55,6 +56,17 @@ export function DiscoverySwipeModal({ visible, onClose }: DiscoverySwipeModalPro
     refetch,
   } = useDiscoveryQueue(userId || '');
 
+  // Debug: Track when currentCard changes
+  useEffect(() => {
+    if (currentCard) {
+      console.log('[DiscoverySwipeModal] 🃏 Current card changed:', {
+        index: currentIndex,
+        title: currentCard.title,
+        id: currentCard.id,
+      });
+    }
+  }, [currentCard?.id, currentIndex]);
+
   // Single stable pre-load effect with deduplication
   useEffect(() => {
     if (!queue || queue.length === 0) return;
@@ -89,11 +101,38 @@ export function DiscoverySwipeModal({ visible, onClose }: DiscoverySwipeModalPro
 
   const handleRate = async () => {
     if (!currentCard) return;
-    // Open rating modal instead of navigating
+    console.log('[discovery-swipe] Opening rating modal for:', currentCard.title);
+    // Open rating modal - don't advance to next card yet
     setShowRatingModal(true);
   };
 
   const handleAdd = async () => {
+    if (!currentCard || !userId) return;
+
+    console.log('[discovery-swipe] Adding to list:', currentCard.title);
+
+    // Add to user_lists with episode tracking
+    const { error } = await supabase
+      .from('user_lists')
+      .upsert({
+        user_id: userId,
+        anime_id: currentCard.id,
+        status: 'plan_to_watch',
+        bookmarked: false,
+        current_episode: 0,
+        total_episodes: null, // Will be set properly when they start watching
+        started_at: null,
+        last_watched_at: null,
+        updated_at: new Date().toISOString(),
+      }, { onConflict: 'user_id,anime_id' });
+
+    if (error) {
+      console.error('[discovery-swipe] Add to list error:', error);
+    } else {
+      console.log('[discovery-swipe] Added to Plan to Watch successfully');
+    }
+
+    // Record swipe action and move to next card
     await handleSwipe('add');
   };
 
@@ -130,6 +169,13 @@ export function DiscoverySwipeModal({ visible, onClose }: DiscoverySwipeModalPro
     await handleSwipe('rate');
   };
 
+  const handleRatingCancel = () => {
+    console.log('[discovery-swipe] Rating modal canceled');
+    // Just close modal - don't advance to next card
+    // Card will be ready for re-swiping
+    setShowRatingModal(false);
+  };
+
   // Reset expansion when card changes
   useEffect(() => {
     setExpandedCard(false);
@@ -163,9 +209,10 @@ export function DiscoverySwipeModal({ visible, onClose }: DiscoverySwipeModalPro
       presentationStyle="fullScreen"
       onRequestClose={onClose}
     >
-      <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
-        {/* Header */}
-        <View style={styles.header}>
+      <GestureHandlerRootView style={{ flex: 1 }}>
+        <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
+          {/* Header */}
+          <View style={styles.header}>
           <Pressable onPress={onClose} style={styles.closeIcon}>
             <Ionicons name="close" size={28} color={currentTheme.foreground} />
           </Pressable>
@@ -200,6 +247,7 @@ export function DiscoverySwipeModal({ visible, onClose }: DiscoverySwipeModalPro
             <>
               <View style={styles.cardViewport}>
                 <SwipeCard
+                  key={currentCard.id}
                   anime={currentCard}
                   expanded={expandedCard}
                   onSwipe={async (action) => {
@@ -239,18 +287,19 @@ export function DiscoverySwipeModal({ visible, onClose }: DiscoverySwipeModalPro
           )}
         </View>
 
-        {/* Dev Controls and footer hints temporarily removed */}
-      </SafeAreaView>
+          {/* Dev Controls and footer hints temporarily removed */}
+        </SafeAreaView>
 
-      {/* Rating Modal */}
-      {currentCard && (
-        <RatingModal
-          anime={currentCard}
-          visible={showRatingModal}
-          onClose={() => setShowRatingModal(false)}
-          onSubmit={handleRatingSubmit}
-        />
-      )}
+        {/* Rating Modal */}
+        {currentCard && (
+          <RatingModal
+            anime={currentCard}
+            visible={showRatingModal}
+            onClose={handleRatingCancel}
+            onSubmit={handleRatingSubmit}
+          />
+        )}
+      </GestureHandlerRootView>
     </Modal>
   );
 }
@@ -258,7 +307,7 @@ export function DiscoverySwipeModal({ visible, onClose }: DiscoverySwipeModalPro
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F5F5F7',
+    backgroundColor: '#F5F5F7', // Apple's light background
   },
   cardViewport: {
     flex: 1,
@@ -276,29 +325,28 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 20,
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: currentTheme.border,
+    paddingTop: 8,
+    paddingBottom: 12,
   },
   closeIcon: {
     width: 40,
     height: 40,
     justifyContent: 'center',
-    alignItems: 'flex-start',
+    alignItems: 'center',
   },
   headerCenter: {
     flex: 1,
     alignItems: 'center',
   },
   headerTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: currentTheme.foreground,
-    letterSpacing: -0.3,
+    fontSize: 17,
+    fontWeight: '600',
+    color: '#1D1D1F',
+    letterSpacing: -0.4,
   },
   headerSubtitle: {
     fontSize: 13,
-    color: currentTheme.mutedForeground,
+    color: '#86868B',
     marginTop: 2,
   },
   headerRight: {
@@ -315,8 +363,9 @@ const styles = StyleSheet.create({
     gap: 16,
   },
   loadingText: {
-    fontSize: 16,
-    color: currentTheme.mutedForeground,
+    fontSize: 15,
+    color: '#86868B',
+    letterSpacing: -0.2,
   },
   errorContainer: {
     justifyContent: 'center',
@@ -325,20 +374,22 @@ const styles = StyleSheet.create({
     paddingHorizontal: 40,
   },
   errorText: {
-    fontSize: 16,
-    color: currentTheme.mutedForeground,
+    fontSize: 15,
+    color: '#86868B',
     textAlign: 'center',
+    letterSpacing: -0.2,
   },
   retryButton: {
-    backgroundColor: currentTheme.primary,
+    backgroundColor: '#007AFF',
     paddingHorizontal: 24,
     paddingVertical: 12,
     borderRadius: 12,
   },
   retryButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: currentTheme.primaryForeground,
+    fontSize: 17,
+    fontWeight: '500',
+    color: '#FFFFFF',
+    letterSpacing: -0.4,
   },
   emptyContainer: {
     justifyContent: 'center',
@@ -352,26 +403,28 @@ const styles = StyleSheet.create({
   },
   emptyTitle: {
     fontSize: 24,
-    fontWeight: '700',
-    color: currentTheme.foreground,
+    fontWeight: '600',
+    color: '#1D1D1F',
     letterSpacing: -0.5,
   },
   emptyText: {
-    fontSize: 16,
-    color: currentTheme.mutedForeground,
+    fontSize: 15,
+    color: '#86868B',
     textAlign: 'center',
-    lineHeight: 24,
+    lineHeight: 22,
+    letterSpacing: -0.2,
   },
   closeButton: {
     marginTop: 16,
-    backgroundColor: currentTheme.primary,
+    backgroundColor: '#007AFF',
     paddingHorizontal: 32,
     paddingVertical: 12,
     borderRadius: 12,
   },
   closeButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: currentTheme.primaryForeground,
+    fontSize: 17,
+    fontWeight: '500',
+    color: '#FFFFFF',
+    letterSpacing: -0.4,
   },
 });

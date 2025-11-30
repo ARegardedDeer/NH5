@@ -294,13 +294,49 @@ export default function AnimeDetailScreen() {
   const persistUserList = useCallback(
     async ({ userId, animeId, bookmarked: nextBookmarked, status: nextStatus }: PersistPayload) => {
       if (!hasUserListsTable || !userId) return false;
-      const payload = {
+
+      // Fetch anime episodes_count for proper episode tracking
+      const { data: anime } = await supabase
+        .from('anime')
+        .select('episodes_count')
+        .eq('id', animeId)
+        .single();
+
+      const episodesCount = anime?.episodes_count ?? null;
+      const now = new Date().toISOString();
+
+      // Build payload with episode tracking based on status
+      const payload: any = {
         user_id: userId,
         anime_id: animeId,
         status: nextStatus,
         bookmarked: nextBookmarked,
-        updated_at: new Date().toISOString(),
+        updated_at: now,
       };
+
+      // Add episode tracking columns based on status (normalize UI labels to db values)
+      const normalizedStatus = String(nextStatus).toLowerCase().replace(/\s+/g, '_');
+
+      if (normalizedStatus === 'watching') {
+        payload.current_episode = 1;
+        payload.total_episodes = episodesCount;
+        payload.started_at = now;
+        payload.last_watched_at = now;
+      } else if (normalizedStatus === 'plan_to_watch') {
+        payload.current_episode = 0;
+        payload.total_episodes = episodesCount;
+        payload.started_at = null;
+        payload.last_watched_at = null;
+      } else if (normalizedStatus === 'completed') {
+        payload.current_episode = episodesCount ?? 0;
+        payload.total_episodes = episodesCount;
+        payload.completed_at = now;
+        payload.original_completed_at = now;
+        payload.last_watched_at = now;
+      } else if (normalizedStatus === 'on_hold' || normalizedStatus === 'dropped') {
+        // Keep existing current_episode - only update timestamp
+        payload.last_watched_at = now;
+      }
 
       const { error } = await supabase
         .from('user_lists')
