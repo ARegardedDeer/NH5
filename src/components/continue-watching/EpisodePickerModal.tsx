@@ -11,6 +11,7 @@ import {
   View,
 } from 'react-native';
 import { Picker } from '@react-native-picker/picker';
+import HapticFeedback from 'react-native-haptic-feedback';
 import { useEpisodeUpdate } from '../../hooks/useEpisodeUpdate';
 
 interface EpisodePickerModalProps {
@@ -40,11 +41,13 @@ export const EpisodePickerModal: React.FC<EpisodePickerModalProps> = (props) => 
   const updateEpisode = useEpisodeUpdate();
   const [selectedEpisode, setSelectedEpisode] = useState<number>(currentEpisode);
   const [jumpToEpisode, setJumpToEpisode] = useState('');
+  const [showPicker, setShowPicker] = useState(false);
 
   useEffect(() => {
     if (visible) {
       setSelectedEpisode(currentEpisode);
       setJumpToEpisode('');
+      setShowPicker(false); // Start collapsed
     }
   }, [visible, currentEpisode]);
 
@@ -67,8 +70,10 @@ export const EpisodePickerModal: React.FC<EpisodePickerModalProps> = (props) => 
   const formatEpisodeLabel = (episode: number) =>
     Number.isInteger(episode) ? `Episode ${episode}` : `Episode ${episode} (Special)`;
 
-  // Always show text input as a convenience option (previously only for 100+ episodes)
-  const showTextInput = true;
+  const handleEditToggle = () => {
+    HapticFeedback.trigger('impactLight');
+    setShowPicker(!showPicker);
+  };
 
   const performUpdate = (episodeToSet: number) => {
     updateEpisode.mutate(
@@ -121,6 +126,9 @@ export const EpisodePickerModal: React.FC<EpisodePickerModalProps> = (props) => 
     performUpdate(parsedEpisode);
   };
 
+  // Calculate progress percentage
+  const progressPercentage = totalEpisodes ? Math.min((currentEpisode / totalEpisodes) * 100, 100) : 0;
+
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
       <KeyboardAvoidingView
@@ -130,6 +138,10 @@ export const EpisodePickerModal: React.FC<EpisodePickerModalProps> = (props) => 
         <Pressable style={styles.backdrop} onPress={onClose} />
 
         <View style={styles.modalContent}>
+          {/* Drag Handle (iOS standard) */}
+          <View style={styles.dragHandle} />
+
+          {/* Header */}
           <View style={styles.header}>
             <Text style={styles.title}>Update Progress</Text>
             <Text style={styles.animeTitle} numberOfLines={1}>
@@ -137,62 +149,88 @@ export const EpisodePickerModal: React.FC<EpisodePickerModalProps> = (props) => 
             </Text>
           </View>
 
+          {/* Current Progress with Edit Button */}
           <View style={styles.currentProgress}>
-            <Text style={styles.currentLabel}>Current Episode:</Text>
-            <Text style={styles.currentValue}>
-              {currentEpisode}
-              {totalEpisodes ? ` / ${totalEpisodes}` : ''}
-            </Text>
-          </View>
-
-          <View style={styles.pickerSection}>
-            <Text style={styles.sectionLabel}>Scroll to select:</Text>
-            <View style={styles.pickerContainer}>
-              <Picker
-                selectedValue={selectedEpisode}
-                onValueChange={(value) => setSelectedEpisode(Number(value))}
-                itemStyle={styles.pickerItem}
-              >
-                {availableEpisodes.map((episode) => (
-                  <Picker.Item
-                    key={episode}
-                    label={formatEpisodeLabel(episode)}
-                    value={episode}
-                  />
-                ))}
-              </Picker>
+            <View style={styles.currentProgressContent}>
+              <Text style={styles.currentLabel}>Current Episode:</Text>
+              <Text style={styles.currentValue}>
+                {currentEpisode}
+                {totalEpisodes && ` / ${totalEpisodes}`}
+              </Text>
             </View>
-          </View>
-
-          {showTextInput && (
-            <View style={styles.jumpSection}>
-              <Text style={styles.sectionLabel}>Or type episode number:</Text>
-              <TextInput
-                style={styles.textInput}
-                placeholder="e.g., 15"
-                keyboardType="number-pad"
-                value={jumpToEpisode}
-                onChangeText={setJumpToEpisode}
-                placeholderTextColor="#86868B"
-              />
-            </View>
-          )}
-
-          <View style={styles.buttons}>
-            <Pressable style={[styles.button, styles.cancelButton]} onPress={onClose}>
-              <Text style={styles.cancelButtonText}>Cancel</Text>
-            </Pressable>
-
-            <Pressable
-              style={[styles.button, styles.confirmButton]}
-              onPress={handleConfirm}
-              disabled={updateEpisode.isPending}
-            >
-              <Text style={styles.confirmButtonText}>
-                {updateEpisode.isPending ? 'Updating...' : 'Confirm'}
+            <Pressable style={styles.editButton} onPress={handleEditToggle}>
+              <Text style={styles.editButtonText}>
+                {showPicker ? 'Done' : 'Edit'}
               </Text>
             </Pressable>
           </View>
+
+          {/* Progress Bar */}
+          {totalEpisodes && (
+            <View style={styles.progressContainer}>
+              <View style={styles.progressBarBackground}>
+                <View style={[styles.progressBarFill, { width: `${progressPercentage}%` }]} />
+              </View>
+              <Text style={styles.progressPercentage}>
+                {Math.round(progressPercentage)}%
+              </Text>
+            </View>
+          )}
+
+          {/* Picker (Collapsible) */}
+          {showPicker && (
+            <>
+              {/* Episode Picker */}
+              <View style={styles.pickerSection}>
+                <Text style={styles.sectionLabel}>Select Episode:</Text>
+                <View style={styles.pickerContainer}>
+                  <Picker
+                    selectedValue={selectedEpisode}
+                    onValueChange={(value) => setSelectedEpisode(Number(value))}
+                    itemStyle={styles.pickerItem}
+                  >
+                    {availableEpisodes.map((episode) => (
+                      <Picker.Item
+                        key={episode}
+                        label={formatEpisodeLabel(episode)}
+                        value={episode}
+                      />
+                    ))}
+                  </Picker>
+                </View>
+              </View>
+
+              {/* Text Input (Always show when expanded) */}
+              <View style={styles.jumpSection}>
+                <Text style={styles.sectionLabel}>Or type episode number:</Text>
+                <TextInput
+                  style={styles.textInput}
+                  placeholder="e.g., 15"
+                  keyboardType="number-pad"
+                  value={jumpToEpisode}
+                  onChangeText={setJumpToEpisode}
+                  placeholderTextColor="#86868B"
+                />
+              </View>
+
+              {/* Action Buttons */}
+              <View style={styles.buttons}>
+                <Pressable style={[styles.button, styles.cancelButton]} onPress={onClose}>
+                  <Text style={styles.cancelButtonText}>Cancel</Text>
+                </Pressable>
+
+                <Pressable
+                  style={[styles.button, styles.confirmButton]}
+                  onPress={handleConfirm}
+                  disabled={updateEpisode.isPending}
+                >
+                  <Text style={styles.confirmButtonText}>
+                    {updateEpisode.isPending ? 'Updating...' : 'Confirm'}
+                  </Text>
+                </Pressable>
+              </View>
+            </>
+          )}
         </View>
       </KeyboardAvoidingView>
     </Modal>
@@ -212,9 +250,17 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
-    paddingTop: 20,
+    paddingTop: 12,
     paddingBottom: 40,
     paddingHorizontal: 20,
+  },
+  dragHandle: {
+    width: 36,
+    height: 4,
+    backgroundColor: '#C7C7CC',
+    borderRadius: 2,
+    alignSelf: 'center',
+    marginBottom: 12,
   },
   header: {
     marginBottom: 20,
@@ -234,20 +280,64 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: 12,
+    paddingVertical: 16,
     paddingHorizontal: 16,
     backgroundColor: '#F5F5F7',
     borderRadius: 12,
-    marginBottom: 20,
+    marginBottom: 16,
+  },
+  currentProgressContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flex: 1,
   },
   currentLabel: {
     fontSize: 15,
     color: '#1D1D1F',
   },
   currentValue: {
-    fontSize: 17,
-    fontWeight: '600',
+    fontSize: 20,
+    fontWeight: '700',
     color: '#7C3AED',
+  },
+  editButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 8,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E5E5EA',
+  },
+  editButtonText: {
+    fontSize: 15,
+    color: '#7C3AED',
+    fontWeight: '600',
+  },
+  progressContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginBottom: 20,
+  },
+  progressBarBackground: {
+    flex: 1,
+    height: 8,
+    backgroundColor: '#E5E5EA',
+    borderRadius: 4,
+    overflow: 'hidden',
+  },
+  progressBarFill: {
+    height: '100%',
+    backgroundColor: '#7C3AED',
+    borderRadius: 4,
+  },
+  progressPercentage: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#7C3AED',
+    minWidth: 50,
+    textAlign: 'right',
   },
   pickerSection: {
     marginBottom: 20,
