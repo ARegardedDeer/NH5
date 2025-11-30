@@ -78,7 +78,7 @@ export const ContinueWatchingSection: React.FC<ContinueWatchingSectionProps> = (
             onContinue={() => handleContinue(item)}
           />
         )}
-        keyExtractor={(item) => item.id}
+        keyExtractor={(item) => `${item.user_id}-${item.anime_id}`}
         horizontal
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.listContent}
@@ -90,7 +90,6 @@ export const ContinueWatchingSection: React.FC<ContinueWatchingSectionProps> = (
         <EpisodePickerModal
           visible={!!selectedAnime}
           onClose={handleCloseModal}
-          userListId={selectedAnime.id}
           animeId={selectedAnime.anime_id}
           animeTitle={selectedAnime.anime.title}
           currentEpisode={selectedAnime.current_episode}

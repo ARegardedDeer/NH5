@@ -16,7 +16,6 @@ import { useEpisodeUpdate } from '../../hooks/useEpisodeUpdate';
 interface EpisodePickerModalProps {
   visible: boolean;
   onClose: () => void;
-  userListId: string;
   animeId: string;
   animeTitle: string;
   currentEpisode: number;
@@ -30,7 +29,6 @@ export const EpisodePickerModal: React.FC<EpisodePickerModalProps> = (props) => 
   const {
     visible,
     onClose,
-    userListId,
     animeId,
     animeTitle,
     currentEpisode,
@@ -72,7 +70,6 @@ export const EpisodePickerModal: React.FC<EpisodePickerModalProps> = (props) => 
   const performUpdate = (episodeToSet: number) => {
     updateEpisode.mutate(
       {
-        userListId,
         animeId,
         newEpisode: episodeToSet,
         currentEpisode,

@@ -3,7 +3,6 @@ import { supabase } from '../db/supabaseClient';
 import HapticFeedback from 'react-native-haptic-feedback';
 
 interface UpdateEpisodeParams {
-  userListId: string;
   animeId: string;
   newEpisode: number;
   currentEpisode: number;
@@ -16,7 +15,6 @@ export const useEpisodeUpdate = () => {
 
   return useMutation({
     mutationFn: async ({
-      userListId,
       animeId,
       newEpisode,
       totalEpisodes,
@@ -42,7 +40,8 @@ export const useEpisodeUpdate = () => {
         const { data: existing } = await supabase
           .from('user_lists')
           .select('original_completed_at')
-          .eq('id', userListId)
+          .eq('user_id', userId)
+          .eq('anime_id', animeId)
           .single();
 
         if (!existing?.original_completed_at) {
@@ -53,7 +52,8 @@ export const useEpisodeUpdate = () => {
       const { data, error } = await supabase
         .from('user_lists')
         .update(updateData)
-        .eq('id', userListId)
+        .eq('user_id', userId)
+        .eq('anime_id', animeId)
         .select()
         .single();
 

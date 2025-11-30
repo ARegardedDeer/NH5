@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '../db/supabaseClient';
 
 interface ContinueWatchingItem {
-  id: string;
+  user_id: string;
   anime_id: string;
   status: 'watching' | 'rewatching';
   current_episode: number;
@@ -43,7 +43,7 @@ export const useContinueWatching = (options?: UseContinueWatchingOptions) => {
       let query = supabase
         .from('user_lists')
         .select(`
-          id,
+          user_id,
           anime_id,
           status,
           current_episode,
