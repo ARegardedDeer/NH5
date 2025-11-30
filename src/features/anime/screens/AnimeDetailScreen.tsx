@@ -293,55 +293,99 @@ export default function AnimeDetailScreen() {
 
   const persistUserList = useCallback(
     async ({ userId, animeId, bookmarked: nextBookmarked, status: nextStatus }: PersistPayload) => {
-      if (!hasUserListsTable || !userId) return false;
+      console.log('[anime] 🔄 persistUserList START:', {
+        userId: userId ?? 'null',
+        animeId,
+        nextStatus,
+        nextBookmarked,
+        hasUserListsTable,
+      });
 
-      // Fetch anime episodes_count for proper episode tracking
-      const { data: anime } = await supabase
-        .from('anime')
-        .select('episodes_count')
-        .eq('id', animeId)
-        .single();
-
-      const episodesCount = anime?.episodes_count ?? null;
-      const now = new Date().toISOString();
-
-      // Build payload with episode tracking based on status
-      const payload: any = {
-        user_id: userId,
-        anime_id: animeId,
-        status: nextStatus,
-        bookmarked: nextBookmarked,
-        updated_at: now,
-      };
-
-      // Add episode tracking columns based on status
-      // Status values must match DB constraint: 'Watching', 'Plan to Watch', 'Completed', 'On Hold', 'Dropped'
-      if (nextStatus === 'Watching') {
-        payload.current_episode = 1;
-        payload.total_episodes = episodesCount;
-        payload.started_at = now;
-        payload.last_watched_at = now;
-      } else if (nextStatus === 'Plan to Watch') {
-        payload.current_episode = 0;
-        payload.total_episodes = episodesCount;
-        payload.started_at = null;
-        payload.last_watched_at = null;
-      } else if (nextStatus === 'Completed') {
-        payload.current_episode = episodesCount ?? 0;
-        payload.total_episodes = episodesCount;
-        payload.completed_at = now;
-        payload.original_completed_at = now;
-        payload.last_watched_at = now;
-      } else if (nextStatus === 'On Hold' || nextStatus === 'Dropped') {
-        // Keep existing current_episode - only update timestamp
-        payload.last_watched_at = now;
+      if (!hasUserListsTable || !userId) {
+        console.warn('[anime] ⚠️ Aborting: hasUserListsTable=', hasUserListsTable, 'userId=', userId ?? 'null');
+        return false;
       }
 
-      const { error } = await supabase
-        .from('user_lists')
-        .upsert(payload, { onConflict: 'user_id,anime_id' });
+      try {
+        // Fetch anime episodes_count for proper episode tracking
+        console.log('[anime] 📡 Fetching anime data for episodes_count...');
+        const { data: anime, error: animeError } = await supabase
+          .from('anime')
+          .select('episodes_count')
+          .eq('id', animeId)
+          .single();
 
-      return !error;
+        if (animeError) {
+          console.error('[anime] ❌ Error fetching anime:', animeError);
+          console.error('[anime] ❌ Error details:', JSON.stringify(animeError, null, 2));
+          return false;
+        }
+
+        const episodesCount = anime?.episodes_count ?? null;
+        console.log('[anime] ✅ Fetched anime:', { episodesCount });
+
+        const now = new Date().toISOString();
+
+        // Build payload with episode tracking based on status
+        const payload: any = {
+          user_id: userId,
+          anime_id: animeId,
+          status: nextStatus,
+          bookmarked: nextBookmarked,
+          updated_at: now,
+        };
+
+        // Add episode tracking columns based on status
+        // Status values must match DB constraint: 'Watching', 'Plan to Watch', 'Completed', 'On Hold', 'Dropped'
+        if (nextStatus === 'Watching') {
+          payload.current_episode = 1;
+          payload.total_episodes = episodesCount;
+          payload.started_at = now;
+          payload.last_watched_at = now;
+        } else if (nextStatus === 'Plan to Watch') {
+          payload.current_episode = 0;
+          payload.total_episodes = episodesCount;
+          payload.started_at = null;
+          payload.last_watched_at = null;
+        } else if (nextStatus === 'Completed') {
+          payload.current_episode = episodesCount ?? 0;
+          payload.total_episodes = episodesCount;
+          payload.completed_at = now;
+          payload.original_completed_at = now;
+          payload.last_watched_at = now;
+        } else if (nextStatus === 'On Hold' || nextStatus === 'Dropped') {
+          // Keep existing current_episode - only update timestamp
+          payload.last_watched_at = now;
+        }
+
+        console.log('[anime] 🏗️ Built payload:', payload);
+        console.log('[anime] 💾 Upserting to database...');
+
+        const { data, error } = await supabase
+          .from('user_lists')
+          .upsert(payload, { onConflict: 'user_id,anime_id' })
+          .select()
+          .single();
+
+        if (error) {
+          console.error('[anime] ❌ Upsert error:', error);
+          console.error('[anime] ❌ Error message:', error?.message);
+          console.error('[anime] ❌ Error details:', JSON.stringify(error, null, 2));
+          return false;
+        }
+
+        console.log('[anime] ✅ SUCCESSFULLY PERSISTED:', data);
+        console.log('[anime] ✅ Saved status:', data.status);
+        console.log('[anime] ✅ Current episode:', data.current_episode);
+        console.log('[anime] ✅ Total episodes:', data.total_episodes);
+        console.log('[anime] ✅ Bookmarked:', data.bookmarked);
+
+        return true;
+      } catch (error) {
+        console.error('[anime] 💥 persistUserList EXCEPTION:', error);
+        console.error('[anime] 💥 Exception details:', JSON.stringify(error, null, 2));
+        return false;
+      }
     },
     [hasUserListsTable]
   );
