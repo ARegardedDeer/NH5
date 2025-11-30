@@ -40,14 +40,14 @@ export const EpisodePickerModal: React.FC<EpisodePickerModalProps> = (props) => 
   } = props;
   const updateEpisode = useEpisodeUpdate();
   const [selectedEpisode, setSelectedEpisode] = useState<number>(currentEpisode);
-  const [jumpToEpisode, setJumpToEpisode] = useState('');
-  const [showPicker, setShowPicker] = useState(false);
+  const [isEditingInline, setIsEditingInline] = useState(false);
+  const [inlineEpisode, setInlineEpisode] = useState(currentEpisode.toString());
 
   useEffect(() => {
     if (visible) {
       setSelectedEpisode(currentEpisode);
-      setJumpToEpisode('');
-      setShowPicker(false); // Start collapsed
+      setInlineEpisode(currentEpisode.toString());
+      setIsEditingInline(false);
     }
   }, [visible, currentEpisode]);
 
@@ -71,8 +71,34 @@ export const EpisodePickerModal: React.FC<EpisodePickerModalProps> = (props) => 
     Number.isInteger(episode) ? `Episode ${episode}` : `Episode ${episode} (Special)`;
 
   const handleEditToggle = () => {
+    if (isEditingInline) {
+      // Done editing - validate and apply changes
+      const parsed = parseInt(inlineEpisode);
+      if (!isNaN(parsed) && parsed >= 1) {
+        const validEpisode = totalEpisodes && parsed > totalEpisodes ? totalEpisodes : parsed;
+        setSelectedEpisode(validEpisode);
+        setInlineEpisode(validEpisode.toString());
+      } else {
+        // Invalid input - reset to current
+        setInlineEpisode(currentEpisode.toString());
+      }
+      setIsEditingInline(false);
+    } else {
+      // Start editing
+      setInlineEpisode(selectedEpisode.toString());
+      setIsEditingInline(true);
+    }
     HapticFeedback.trigger('impactLight');
-    setShowPicker(!showPicker);
+  };
+
+  const handleInlineBlur = () => {
+    // Validate on blur
+    const parsed = parseInt(inlineEpisode);
+    if (isNaN(parsed) || parsed < 1) {
+      setInlineEpisode(selectedEpisode.toString());
+    } else if (totalEpisodes && parsed > totalEpisodes) {
+      setInlineEpisode(totalEpisodes.toString());
+    }
   };
 
   const performUpdate = (episodeToSet: number) => {
@@ -96,14 +122,15 @@ export const EpisodePickerModal: React.FC<EpisodePickerModalProps> = (props) => 
   };
 
   const handleConfirm = () => {
-    const parsedEpisode = jumpToEpisode ? parseFloat(jumpToEpisode) : selectedEpisode;
+    // Use inline episode if currently editing, otherwise use selected
+    const episodeToConfirm = isEditingInline ? parseInt(inlineEpisode) : selectedEpisode;
 
-    if (Number.isNaN(parsedEpisode) || parsedEpisode < 1) {
+    if (Number.isNaN(episodeToConfirm) || episodeToConfirm < 1) {
       Alert.alert('Invalid Episode', 'Please enter a valid episode number.');
       return;
     }
 
-    if (totalEpisodes && parsedEpisode > totalEpisodes) {
+    if (totalEpisodes && episodeToConfirm > totalEpisodes) {
       Alert.alert(
         'Episode Out of Range',
         `This anime has ${totalEpisodes} episodes. Please enter a number between 1 and ${totalEpisodes}.`,
@@ -111,19 +138,19 @@ export const EpisodePickerModal: React.FC<EpisodePickerModalProps> = (props) => 
       return;
     }
 
-    if (isBigJump(parsedEpisode)) {
+    if (isBigJump(episodeToConfirm)) {
       Alert.alert(
         'Jump Ahead?',
-        `You're jumping from Episode ${currentEpisode} to Episode ${parsedEpisode}.\n\nThis will mark episodes 1-${parsedEpisode} as watched.`,
+        `You're jumping from Episode ${currentEpisode} to Episode ${episodeToConfirm}.\n\nThis will mark episodes 1-${episodeToConfirm} as watched.`,
         [
           { text: 'Cancel', style: 'cancel' },
-          { text: 'Confirm', onPress: () => performUpdate(parsedEpisode) },
+          { text: 'Confirm', onPress: () => performUpdate(episodeToConfirm) },
         ],
       );
       return;
     }
 
-    performUpdate(parsedEpisode);
+    performUpdate(episodeToConfirm);
   };
 
   // Calculate progress percentage
@@ -149,18 +176,37 @@ export const EpisodePickerModal: React.FC<EpisodePickerModalProps> = (props) => 
             </Text>
           </View>
 
-          {/* Current Progress with Edit Button */}
+          {/* Current Episode - Inline Editable */}
           <View style={styles.currentProgress}>
-            <View style={styles.currentProgressContent}>
-              <Text style={styles.currentLabel}>Current Episode:</Text>
-              <Text style={styles.currentValue}>
-                {currentEpisode}
-                {totalEpisodes && ` / ${totalEpisodes}`}
-              </Text>
+            <Text style={styles.currentLabel}>Current Episode:</Text>
+
+            <View style={styles.episodeInputContainer}>
+              {isEditingInline ? (
+                <TextInput
+                  style={styles.inlineEpisodeInput}
+                  value={inlineEpisode}
+                  onChangeText={setInlineEpisode}
+                  keyboardType="number-pad"
+                  autoFocus
+                  selectTextOnFocus
+                  maxLength={4}
+                  onBlur={handleInlineBlur}
+                />
+              ) : (
+                <Text style={styles.currentValue}>
+                  {selectedEpisode}
+                </Text>
+              )}
+
+              {totalEpisodes && (
+                <Text style={styles.totalEpisodes}>/ {totalEpisodes}</Text>
+              )}
             </View>
+
+            {/* Edit/Done Button */}
             <Pressable style={styles.editButton} onPress={handleEditToggle}>
               <Text style={styles.editButtonText}>
-                {showPicker ? 'Done' : 'Edit'}
+                {isEditingInline ? '✓' : '✏️'}
               </Text>
             </Pressable>
           </View>
@@ -177,60 +223,45 @@ export const EpisodePickerModal: React.FC<EpisodePickerModalProps> = (props) => 
             </View>
           )}
 
-          {/* Picker (Collapsible) */}
-          {showPicker && (
-            <>
-              {/* Episode Picker */}
-              <View style={styles.pickerSection}>
-                <Text style={styles.sectionLabel}>Select Episode:</Text>
-                <View style={styles.pickerContainer}>
-                  <Picker
-                    selectedValue={selectedEpisode}
-                    onValueChange={(value) => setSelectedEpisode(Number(value))}
-                    itemStyle={styles.pickerItem}
-                  >
-                    {availableEpisodes.map((episode) => (
-                      <Picker.Item
-                        key={episode}
-                        label={formatEpisodeLabel(episode)}
-                        value={episode}
-                      />
-                    ))}
-                  </Picker>
-                </View>
-              </View>
+          {/* Episode Picker - Always Visible */}
+          <View style={styles.pickerSection}>
+            <Text style={styles.sectionLabel}>Select Episode:</Text>
+            <View style={styles.pickerContainer}>
+              <Picker
+                selectedValue={selectedEpisode}
+                onValueChange={(value) => {
+                  setSelectedEpisode(Number(value));
+                  setInlineEpisode(value.toString());
+                }}
+                itemStyle={styles.pickerItem}
+              >
+                {availableEpisodes.map((episode) => (
+                  <Picker.Item
+                    key={episode}
+                    label={formatEpisodeLabel(episode)}
+                    value={episode}
+                  />
+                ))}
+              </Picker>
+            </View>
+          </View>
 
-              {/* Text Input (Always show when expanded) */}
-              <View style={styles.jumpSection}>
-                <Text style={styles.sectionLabel}>Or type episode number:</Text>
-                <TextInput
-                  style={styles.textInput}
-                  placeholder="e.g., 15"
-                  keyboardType="number-pad"
-                  value={jumpToEpisode}
-                  onChangeText={setJumpToEpisode}
-                  placeholderTextColor="#86868B"
-                />
-              </View>
+          {/* Action Buttons */}
+          <View style={styles.buttons}>
+            <Pressable style={[styles.button, styles.cancelButton]} onPress={onClose}>
+              <Text style={styles.cancelButtonText}>Cancel</Text>
+            </Pressable>
 
-              {/* Action Buttons */}
-              <View style={styles.buttons}>
-                <Pressable style={[styles.button, styles.cancelButton]} onPress={onClose}>
-                  <Text style={styles.cancelButtonText}>Cancel</Text>
-                </Pressable>
-
-                <Pressable
-                  style={[styles.button, styles.confirmButton]}
-                  onPress={handleConfirm}
-                  disabled={updateEpisode.isPending}
-                >
-                  <Text style={styles.confirmButtonText}>
-                    {updateEpisode.isPending ? 'Updating...' : 'Confirm'}
-                  </Text>
-                </Pressable>
-              </View>
-            </>
-          )}
+            <Pressable
+              style={[styles.button, styles.confirmButton]}
+              onPress={handleConfirm}
+              disabled={updateEpisode.isPending}
+            >
+              <Text style={styles.confirmButtonText}>
+                {updateEpisode.isPending ? 'Updating...' : 'Confirm'}
+              </Text>
+            </Pressable>
+          </View>
         </View>
       </KeyboardAvoidingView>
     </Modal>
@@ -286,33 +317,50 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     marginBottom: 16,
   },
-  currentProgressContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    flex: 1,
-  },
   currentLabel: {
     fontSize: 15,
     color: '#1D1D1F',
+  },
+  episodeInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    flex: 1,
+    marginLeft: 8,
   },
   currentValue: {
     fontSize: 20,
     fontWeight: '700',
     color: '#7C3AED',
   },
+  inlineEpisodeInput: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#7C3AED',
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 6,
+    borderWidth: 2,
+    borderColor: '#7C3AED',
+    minWidth: 50,
+    textAlign: 'center',
+  },
+  totalEpisodes: {
+    fontSize: 20,
+    fontWeight: '400',
+    color: '#86868B',
+  },
   editButton: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
     borderRadius: 8,
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
     borderColor: '#E5E5EA',
   },
   editButtonText: {
-    fontSize: 15,
-    color: '#7C3AED',
-    fontWeight: '600',
+    fontSize: 16,
   },
   progressContainer: {
     flexDirection: 'row',
