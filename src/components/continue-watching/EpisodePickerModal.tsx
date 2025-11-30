@@ -67,6 +67,9 @@ export const EpisodePickerModal: React.FC<EpisodePickerModalProps> = (props) => 
   const formatEpisodeLabel = (episode: number) =>
     Number.isInteger(episode) ? `Episode ${episode}` : `Episode ${episode} (Special)`;
 
+  // Always show text input as a convenience option (previously only for 100+ episodes)
+  const showTextInput = true;
+
   const performUpdate = (episodeToSet: number) => {
     updateEpisode.mutate(
       {
@@ -118,8 +121,6 @@ export const EpisodePickerModal: React.FC<EpisodePickerModalProps> = (props) => 
     performUpdate(parsedEpisode);
   };
 
-  const isLongSeries = totalEpisodes ? totalEpisodes >= 100 : false;
-
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
       <KeyboardAvoidingView
@@ -145,7 +146,7 @@ export const EpisodePickerModal: React.FC<EpisodePickerModalProps> = (props) => 
           </View>
 
           <View style={styles.pickerSection}>
-            <Text style={styles.sectionLabel}>Select Episode:</Text>
+            <Text style={styles.sectionLabel}>Scroll to select:</Text>
             <View style={styles.pickerContainer}>
               <Picker
                 selectedValue={selectedEpisode}
@@ -163,13 +164,13 @@ export const EpisodePickerModal: React.FC<EpisodePickerModalProps> = (props) => 
             </View>
           </View>
 
-          {isLongSeries && (
+          {showTextInput && (
             <View style={styles.jumpSection}>
-              <Text style={styles.sectionLabel}>Or jump to episode:</Text>
+              <Text style={styles.sectionLabel}>Or type episode number:</Text>
               <TextInput
                 style={styles.textInput}
-                placeholder="Episode number"
-                keyboardType="decimal-pad"
+                placeholder="e.g., 15"
+                keyboardType="number-pad"
                 value={jumpToEpisode}
                 onChangeText={setJumpToEpisode}
                 placeholderTextColor="#86868B"
