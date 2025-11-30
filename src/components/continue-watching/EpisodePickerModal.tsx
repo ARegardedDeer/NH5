@@ -26,18 +26,19 @@ interface EpisodePickerModalProps {
   onComplete?: (animeId: string) => void;
 }
 
-export const EpisodePickerModal: React.FC<EpisodePickerModalProps> = ({
-  visible,
-  onClose,
-  userListId,
-  animeId,
-  animeTitle,
-  currentEpisode,
-  totalEpisodes,
-  hasSpecials,
-  userId,
-  onComplete,
-}) => {
+export const EpisodePickerModal: React.FC<EpisodePickerModalProps> = (props) => {
+  const {
+    visible,
+    onClose,
+    userListId,
+    animeId,
+    animeTitle,
+    currentEpisode,
+    totalEpisodes,
+    hasSpecials,
+    userId,
+    onComplete,
+  } = props;
   const updateEpisode = useEpisodeUpdate();
   const [selectedEpisode, setSelectedEpisode] = useState<number>(currentEpisode);
   const [jumpToEpisode, setJumpToEpisode] = useState('');
