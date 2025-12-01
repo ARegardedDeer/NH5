@@ -97,6 +97,7 @@ export const MyListScreen = () => {
           layout={Layout.springify()}
         >
           <FlatList
+            key="cards-layout"
             data={activeAnime}
             renderItem={({ item }) => (
               <ActiveCard
@@ -127,6 +128,7 @@ export const MyListScreen = () => {
         layout={Layout.springify()}
       >
         <FlatList
+          key="rows-layout"
           data={activeAnime}
           renderItem={({ item }) => (
             <ActiveRow
