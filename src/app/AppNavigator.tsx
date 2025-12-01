@@ -7,6 +7,7 @@ import PlaceholderScreen from '../features/misc/PlaceholderScreen';
 import ProfileScreen from '../features/profile/screens/ProfileScreen';
 import EditProfileScreen from '../features/profile/screens/EditProfileScreen';
 import ElevenPickerScreen from '../features/profile/screens/ElevenPickerScreen';
+import MyListScreen from '../features/my-list/screens/MyListScreen';
 import { DiscoverScreen } from '../screens/DiscoverScreen';
 // @ts-ignore - Icon library type definitions
 import MaterialIcon from 'react-native-vector-icons/MaterialIcons';
@@ -79,7 +80,7 @@ function MainTabs() {
           },
         })}
       />
-      <Tab.Screen name="My List" children={() => <PlaceholderScreen title="My List" />} />
+      <Tab.Screen name="My List" component={MyListScreen} />
       <Tab.Screen name="Community" children={() => <PlaceholderScreen title="Community" />} />
       <Tab.Screen name="Profile" component={ProfileStackNavigator} />
     </Tab.Navigator>
