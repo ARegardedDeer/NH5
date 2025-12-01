@@ -2,6 +2,8 @@ import React, { useEffect, useState } from "react";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { ScrollView, View, Text, RefreshControl, StyleSheet } from "react-native";
 import { useNavigation } from "@react-navigation/native";
+import { AppNavigationProp } from "../../../types/navigation";
+import { navigateToAnimeDetail } from "../../../utils/navigationHelpers";
 import useProfileData from "../hooks/useProfileData";
 import ProgressBar from "../../../ui/components/ProgressBar";
 import HeroBanner from "../components/HeroBanner";
@@ -17,7 +19,7 @@ const C = {
 };
 
 export default function ProfileScreen() {
-  const navigation = useNavigation<any>();
+  const navigation = useNavigation<AppNavigationProp>();
   const { data, isLoading, refetch, error } = useProfileData();
   const [showOverlay, setShowOverlay] = useState(true);
 
@@ -164,7 +166,7 @@ export default function ProfileScreen() {
         <GridNine
           items={gridItems}
           elevenId={data?.eleven?.id}
-          onPressItem={(id) => navigation.navigate("AnimeDetail", { id })}
+          onPressItem={(id) => navigateToAnimeDetail(navigation, id)}
         />
 
         {console.log("[profile] render: Progress")}

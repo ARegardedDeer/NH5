@@ -16,6 +16,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRoute } from '@react-navigation/native';
+import { AnimeDetailRouteProp } from '../../../types/navigation';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAnimeById } from '../hooks/useAnimeById';
 import { theme } from '../../../ui/theme';
@@ -63,11 +64,10 @@ async function getCurrentUserId(): Promise<string | null> {
   return data?.user?.id ?? null;
 }
 
-type RouteParams = { id: string; title: string };
-
 export default function AnimeDetailScreen() {
-  const route = useRoute() as any;
-  const { id, title } = (route.params || {}) as RouteParams;
+  const route = useRoute<AnimeDetailRouteProp>();
+  const { animeId, title } = route.params;
+  const id = animeId;
 
   const { data, isLoading, error } = useAnimeById(id);
   const toast = useToast();

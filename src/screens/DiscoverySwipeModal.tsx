@@ -20,6 +20,8 @@ import { SwipeCard } from '../components/discovery-swipe/SwipeCard';
 import { ActionButtons } from '../components/discovery-swipe/ActionButtons';
 import { RatingModal } from '../components/discovery-swipe/RatingModal';
 import { currentTheme } from '../styles/discoverySwipeStyles';
+import { AppNavigationProp } from '../types/navigation';
+import { navigateToAnimeDetail } from '../utils/navigationHelpers';
 
 interface DiscoverySwipeModalProps {
   visible: boolean;
@@ -27,7 +29,7 @@ interface DiscoverySwipeModalProps {
 }
 
 export function DiscoverySwipeModal({ visible, onClose }: DiscoverySwipeModalProps) {
-  const navigation = useNavigation<any>();
+  const navigation = useNavigation<AppNavigationProp>();
   const queryClient = useQueryClient();
   const [userId, setUserId] = useState<string | null>(null);
   const [showRatingModal, setShowRatingModal] = useState(false);
@@ -281,7 +283,7 @@ export function DiscoverySwipeModal({ visible, onClose }: DiscoverySwipeModalPro
                   onPress={handleCardPress}
                   onNavigateToDetail={() => {
                     onClose();
-                    navigation.navigate('AnimeDetail', { id: currentCard.id });
+                    navigateToAnimeDetail(navigation, currentCard.id);
                   }}
                 />
               </View>

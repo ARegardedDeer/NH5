@@ -6,7 +6,6 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
-import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useQuery } from '@tanstack/react-query';
 import { supabase, whenAuthed } from '../db/supabaseClient';
 import { currentTheme, spacing } from '../styles/discoverStyles';
@@ -18,17 +17,11 @@ import { RatingCTACard } from '../components/discover/RatingCTACard';
 import { GenrePillsSection } from '../components/discover/GenrePillsSection';
 import { DiscoverySwipeCTA } from '../components/discover/DiscoverySwipeCTA';
 import { DiscoverySwipeModal } from './DiscoverySwipeModal';
-
-// Navigation types
-type DiscoverStackParamList = {
-  DiscoverList: undefined;
-  AnimeDetail: { id: string; title?: string };
-};
-
-type DiscoverNavigation = NativeStackNavigationProp<DiscoverStackParamList, 'DiscoverList'>;
+import { AppNavigationProp } from '../types/navigation';
+import { navigateToAnimeDetail } from '../utils/navigationHelpers';
 
 export function DiscoverScreen() {
-  const navigation = useNavigation<DiscoverNavigation>();
+  const navigation = useNavigation<AppNavigationProp>();
   const [authReady, setAuthReady] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
   const [swipeModalVisible, setSwipeModalVisible] = useState(false);
@@ -77,7 +70,7 @@ export function DiscoverScreen() {
   // Navigation handler for anime cards
   const handleAnimePress = (animeId: string) => {
     console.log('[discover] Navigating to AnimeDetail:', animeId);
-    navigation.navigate('AnimeDetail', { id: animeId });
+    navigateToAnimeDetail(navigation, animeId);
   };
 
   return (

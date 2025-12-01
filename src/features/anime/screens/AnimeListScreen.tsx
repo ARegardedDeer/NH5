@@ -1,8 +1,9 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { View, Text, FlatList, ActivityIndicator, Image, RefreshControl, Pressable } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
-import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { supabase } from '../../../db/supabaseClient';
+import { AppNavigationProp } from '../../../types/navigation';
+import { navigateToAnimeDetail } from '../../../utils/navigationHelpers';
 
 type Row = {
   id: string;
@@ -12,19 +13,12 @@ type Row = {
   thumbnail_url: string | null;
 };
 
-type DiscoverStackParamList = {
-  DiscoverList: undefined;
-  AnimeDetail: { id: string; title?: string };
-};
-
-type DiscoverNavigation = NativeStackNavigationProp<DiscoverStackParamList, 'DiscoverList'>;
-
 export default function AnimeListScreen() {
   const [data, setData] = useState<Row[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const navigation = useNavigation<DiscoverNavigation>();
+  const navigation = useNavigation<AppNavigationProp>();
 
   const load = async () => {
     setError(null);
@@ -74,7 +68,7 @@ export default function AnimeListScreen() {
       contentContainerStyle={{ padding: 16, gap: 12 }}
       renderItem={({ item }) => (
         <Pressable
-          onPress={() => navigation.navigate('AnimeDetail', { id: item.id, title: item.title })}
+          onPress={() => navigateToAnimeDetail(navigation, item.id, item.title)}
           style={({ pressed }) => [
             {
               flexDirection: 'row',

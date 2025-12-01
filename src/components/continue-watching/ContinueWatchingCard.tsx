@@ -1,7 +1,8 @@
 import React from 'react';
 import { View, Text, Image, Pressable, StyleSheet } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
-import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { AppNavigationProp } from '../../types/navigation';
+import { navigateToAnimeDetail } from '../../utils/navigationHelpers';
 
 interface ContinueWatchingCardProps {
   anime: {
@@ -10,17 +11,12 @@ interface ContinueWatchingCardProps {
     thumbnail_url: string | null;
     season_number: number | null;
     series_id: string | null;
+    series?: { title: string } | null;
   };
   currentEpisode: number;
   totalEpisodes: number | null;
   onContinue: () => void;
 }
-
-type RootStackParamList = {
-  AnimeDetail: { id: string };
-};
-
-type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
 export const ContinueWatchingCard: React.FC<ContinueWatchingCardProps> = ({
   anime,
@@ -28,7 +24,7 @@ export const ContinueWatchingCard: React.FC<ContinueWatchingCardProps> = ({
   totalEpisodes,
   onContinue,
 }) => {
-  const navigation = useNavigation<NavigationProp>();
+  const navigation = useNavigation<AppNavigationProp>();
 
   // Calculate progress percentage
   const progress = totalEpisodes ? (currentEpisode / totalEpisodes) * 100 : 0;
@@ -45,13 +41,11 @@ export const ContinueWatchingCard: React.FC<ContinueWatchingCardProps> = ({
     return `Episode ${currentEpisode}`;
   };
 
-  const handleCardPress = () => {
-    // Navigate to anime detail page
-    navigation.navigate('AnimeDetail', { id: anime.id });
-  };
-
   return (
-    <Pressable style={styles.card} onPress={handleCardPress}>
+    <Pressable
+      style={styles.card}
+      onPress={onContinue}
+    >
       {/* Poster Image */}
       {anime.thumbnail_url ? (
         <Image
@@ -90,6 +84,17 @@ export const ContinueWatchingCard: React.FC<ContinueWatchingCardProps> = ({
           }}
         >
           <Text style={styles.continueButtonText}>Continue</Text>
+        </Pressable>
+
+        {/* View Details link */}
+        <Pressable
+          style={styles.detailsLink}
+          onPress={(e) => {
+            e.stopPropagation();
+            navigateToAnimeDetail(navigation, anime.id);
+          }}
+        >
+          <Text style={styles.detailsLinkText}>View Details →</Text>
         </Pressable>
       </View>
     </Pressable>
@@ -171,5 +176,17 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '600',
     letterSpacing: -0.2,
+  },
+
+  detailsLink: {
+    marginTop: 8,
+    paddingVertical: 4,
+  },
+
+  detailsLinkText: {
+    fontSize: 12,
+    color: '#7C3AED',
+    fontWeight: '600',
+    textAlign: 'center',
   },
 });

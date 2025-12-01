@@ -2,7 +2,10 @@ import React, { useState } from 'react';
 import { View, Text, FlatList, Pressable, StyleSheet, ActivityIndicator } from 'react-native';
 import { useContinueWatching } from '../../hooks/useContinueWatching';
 import { ContinueWatchingCard } from './ContinueWatchingCard';
+import { ContinueWatchingCardV2 } from './ContinueWatchingCardV2';
 import { EpisodePickerModal } from './EpisodePickerModal';
+
+const USE_V2 = true;
 
 interface ContinueWatchingSectionProps {
   userId: string;
@@ -71,12 +74,22 @@ export const ContinueWatchingSection: React.FC<ContinueWatchingSectionProps> = (
       <FlatList
         data={continueWatching}
         renderItem={({ item }) => (
-          <ContinueWatchingCard
-            anime={item.anime}
-            currentEpisode={item.current_episode}
-            totalEpisodes={item.total_episodes}
-            onContinue={() => handleContinue(item)}
-          />
+          USE_V2 ? (
+            <ContinueWatchingCardV2
+              anime={item.anime}
+              status={item.status}
+              currentEpisode={item.current_episode}
+              totalEpisodes={item.total_episodes}
+              onContinue={() => handleContinue(item)}
+            />
+          ) : (
+            <ContinueWatchingCard
+              anime={item.anime}
+              currentEpisode={item.current_episode}
+              totalEpisodes={item.total_episodes}
+              onContinue={() => handleContinue(item)}
+            />
+          )
         )}
         keyExtractor={(item) => `${item.user_id}-${item.anime_id}`}
         horizontal

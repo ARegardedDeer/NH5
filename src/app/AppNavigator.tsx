@@ -10,17 +10,17 @@ import ElevenPickerScreen from '../features/profile/screens/ElevenPickerScreen';
 import { DiscoverScreen } from '../screens/DiscoverScreen';
 // @ts-ignore - Icon library type definitions
 import MaterialIcon from 'react-native-vector-icons/MaterialIcons';
+import { DiscoverStackParamList, MainTabParamList, RootStackParamList } from '../types/navigation';
 
-type DiscoverStackParamList = {
-  DiscoverList: undefined;
-  AnimeDetail: { id: string; title?: string };
-};
 const DiscoverStack = createNativeStackNavigator<DiscoverStackParamList>();
 function DiscoverStackNavigator() {
   return (
     <DiscoverStack.Navigator>
-      <DiscoverStack.Screen name="DiscoverList" component={DiscoverScreen} options={{ title: 'Discover' }}/>
-      <DiscoverStack.Screen name="AnimeDetail" component={AnimeDetailScreen} options={({ route }) => ({ title: route.params?.title ?? 'Detail' })}/>
+      <DiscoverStack.Screen
+        name="DiscoverList"
+        component={DiscoverScreen}
+        options={{ title: 'Discover' }}
+      />
     </DiscoverStack.Navigator>
   );
 }
@@ -47,11 +47,12 @@ function ProfileStackNavigator() {
   );
 }
 
-const Tabs = createBottomTabNavigator();
+const Tab = createBottomTabNavigator<MainTabParamList>();
+const RootStack = createNativeStackNavigator<RootStackParamList>();
 
-export default function AppNavigator() {
+function MainTabs() {
   return (
-    <Tabs.Navigator
+    <Tab.Navigator
       screenOptions={({ route }) => ({
         headerShown: false,
         tabBarShowLabel: true,
@@ -68,11 +69,35 @@ export default function AppNavigator() {
         },
       })}
     >
-      <Tabs.Screen name="Home" component={HomeScreen} />
-      <Tabs.Screen name="Discover" component={DiscoverStackNavigator} />
-      <Tabs.Screen name="My List" children={() => <PlaceholderScreen title="My List" />} />
-      <Tabs.Screen name="Community" children={() => <PlaceholderScreen title="Community" />} />
-      <Tabs.Screen name="Profile" component={ProfileStackNavigator} />
-    </Tabs.Navigator>
+      <Tab.Screen name="Home" component={HomeScreen} />
+      <Tab.Screen
+        name="Discover"
+        component={DiscoverStackNavigator}
+        listeners={({ navigation }) => ({
+          tabPress: () => {
+            navigation.navigate('Discover', { screen: 'DiscoverList' });
+          },
+        })}
+      />
+      <Tab.Screen name="My List" children={() => <PlaceholderScreen title="My List" />} />
+      <Tab.Screen name="Community" children={() => <PlaceholderScreen title="Community" />} />
+      <Tab.Screen name="Profile" component={ProfileStackNavigator} />
+    </Tab.Navigator>
+  );
+}
+
+export default function AppNavigator() {
+  return (
+    <RootStack.Navigator>
+      <RootStack.Screen name="MainTabs" component={MainTabs} options={{ headerShown: false }} />
+      <RootStack.Screen
+        name="AnimeDetail"
+        component={AnimeDetailScreen}
+        options={({ route }) => ({
+          title: route.params?.title ?? 'Detail',
+          headerBackTitleVisible: false,
+        })}
+      />
+    </RootStack.Navigator>
   );
 }
