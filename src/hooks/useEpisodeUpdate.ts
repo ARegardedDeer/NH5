@@ -82,6 +82,9 @@ export const useEpisodeUpdate = () => {
       queryClient.invalidateQueries({
         queryKey: ['continue-watching', variables.userId]
       });
+      // Invalidate my list queries (active + status-based)
+      queryClient.invalidateQueries({ queryKey: ['my-list-active'] });
+      queryClient.invalidateQueries({ queryKey: ['my-list-status'] });
 
       console.log('[useEpisodeUpdate] Episode updated successfully');
     },

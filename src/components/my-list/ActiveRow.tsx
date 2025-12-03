@@ -4,6 +4,7 @@ import Animated, { FadeIn, SlideOutLeft } from 'react-native-reanimated';
 import { useNavigation } from '@react-navigation/native';
 import HapticFeedback from 'react-native-haptic-feedback';
 import { AppNavigationProp } from '../../types/navigation';
+import { navigateToAnimeDetail } from '../../utils/navigationHelpers';
 
 interface ActiveRowProps {
   anime: {
@@ -16,7 +17,8 @@ interface ActiveRowProps {
   currentEpisode: number;
   totalEpisodes: number | null;
   status: string;
-  onMenuPress: () => void;
+  onUpdatePress: () => void;
+  onInfoPress: () => void;
 }
 
 export const ActiveRow: React.FC<ActiveRowProps> = ({
@@ -24,7 +26,8 @@ export const ActiveRow: React.FC<ActiveRowProps> = ({
   currentEpisode,
   totalEpisodes,
   status,
-  onMenuPress,
+  onUpdatePress,
+  onInfoPress,
 }) => {
   const navigation = useNavigation<AppNavigationProp>();
 
@@ -43,12 +46,16 @@ export const ActiveRow: React.FC<ActiveRowProps> = ({
 
   const handlePress = () => {
     HapticFeedback.trigger('impactLight');
-    navigation.navigate('AnimeDetail', { animeId: anime.id, title: anime.title });
+    onUpdatePress();
   };
 
-  const handleMenuPress = () => {
+  const handleInfoPress = () => {
     HapticFeedback.trigger('impactLight');
-    onMenuPress();
+    if (onInfoPress) {
+      onInfoPress();
+    } else {
+      navigateToAnimeDetail(navigation, anime.id, anime.title);
+    }
   };
 
   return (
@@ -74,13 +81,18 @@ export const ActiveRow: React.FC<ActiveRowProps> = ({
           </Text>
         </View>
 
-        {/* Menu Button */}
+        {/* Update Chip */}
+        <Pressable style={styles.updateChip} onPress={handlePress}>
+          <Text style={styles.updateChipText}>Update</Text>
+        </Pressable>
+
+        {/* Info Button */}
         <Pressable
-          style={styles.menuButton}
-          onPress={handleMenuPress}
+          style={styles.infoButton}
+          onPress={handleInfoPress}
           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
         >
-          <Text style={styles.menuButtonText}>⋮</Text>
+          <Text style={styles.infoButtonText}>i</Text>
         </Pressable>
       </Pressable>
     </Animated.View>
@@ -120,15 +132,29 @@ const styles = StyleSheet.create({
     color: '#86868B',
   },
 
-  menuButton: {
-    width: 44,
-    height: 44,
+  updateChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    backgroundColor: '#2A2A3E',
+    marginRight: 8,
+  },
+  updateChipText: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+    fontSize: 12,
+  },
+  infoButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#2A2A3E',
     justifyContent: 'center',
     alignItems: 'center',
   },
-
-  menuButtonText: {
-    fontSize: 20,
-    color: '#86868B',
+  infoButtonText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#FFFFFF',
   },
 });

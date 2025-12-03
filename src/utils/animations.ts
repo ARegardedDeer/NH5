@@ -1,4 +1,4 @@
-import { useSharedValue, withSpring, withTiming, Easing } from 'react-native-reanimated';
+import { useSharedValue, withSpring, withTiming, Easing, useAnimatedStyle } from 'react-native-reanimated';
 
 export const TIMINGS = {
   quick: 200,
@@ -19,10 +19,12 @@ export const SPRING_CONFIGS = {
 export const useButtonPress = () => {
   const scale = useSharedValue(1);
 
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+  }));
+
   return {
-    animatedStyle: {
-      transform: [{ scale: scale.value }],
-    },
+    animatedStyle,
     onPressIn: () => {
       scale.value = withSpring(0.95, SPRING_CONFIGS.button);
     },
