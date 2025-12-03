@@ -4,15 +4,17 @@ import { Swipeable } from 'react-native-gesture-handler';
 import HapticFeedback from 'react-native-haptic-feedback';
 
 type Direction = 'left' | 'right'; // Swipeable open direction
+type SwipeDir = 'leftward' | 'rightward'; // physical gesture
 
 export interface MyListSwipeRowProps {
+  tab: 'active' | 'backlog' | 'archive';
   status: string;
   currentEpisode?: number | null;
   lastWatchedAt?: string | null;
   completedAt?: string | null;
   originalCompletedAt?: string | null;
   startedAt?: string | null;
-  tab: 'active' | 'backlog' | 'archive';
+  rewatchCount?: number | null;
   children: React.ReactNode;
   onCommit: (payload: {
     nextStatus: string | null;
@@ -25,25 +27,72 @@ export interface MyListSwipeRowProps {
 }
 
 const revealFraction = 0.15;
-const commitFraction = 0.55;
+const commitFraction = 0.33; // ~33% snap
+const DEBUG_FLAG = __DEV__;
+
+const resolveAction = (
+  tab: 'active' | 'backlog' | 'archive',
+  status: string,
+  swipeDir: SwipeDir,
+  ctx: { completedAt?: string | null; originalCompletedAt?: string | null; rewatchCount?: number | null }
+) => {
+  const completedBefore =
+    !!ctx.completedAt || !!ctx.originalCompletedAt || (ctx.rewatchCount ?? 0) > 0;
+
+  if (tab === 'backlog') {
+    if (swipeDir === 'leftward') {
+      return { label: 'Move Active', color: '#10B981', nextStatus: 'Watching' };
+    }
+    return {
+      label: completedBefore ? 'Archive (Completed)' : 'Archive (Drop)',
+      color: '#EF4444',
+      nextStatus: completedBefore ? 'Completed' : 'Dropped',
+    };
+  }
+
+  if (tab === 'archive') {
+    if (status === 'Dropped') {
+      if (swipeDir === 'leftward') {
+        return { label: 'Backlog', color: '#10B981', nextStatus: 'Plan to Watch' };
+      }
+      return { label: 'No Action', color: '#4B5563', nextStatus: null };
+    }
+    if (status === 'Completed') {
+      if (swipeDir === 'rightward') {
+        return { label: 'Rewatch', color: '#3B82F6', nextStatus: 'Rewatching' };
+      }
+      return { label: 'No Action', color: '#4B5563', nextStatus: null };
+    }
+    return { label: 'No Action', color: '#4B5563', nextStatus: null };
+  }
+
+  return { label: 'No Action', color: '#4B5563', nextStatus: null };
+};
 
 export const MyListSwipeRow: React.FC<MyListSwipeRowProps> = ({
+  tab,
   status,
   currentEpisode,
   lastWatchedAt,
   completedAt,
   originalCompletedAt,
   startedAt,
-  tab,
+  rewatchCount,
   children,
   onCommit,
 }) => {
   const swipeableRef = useRef<Swipeable>(null);
   const [rowWidth, setRowWidth] = useState(320);
   const isRTL = I18nManager.isRTL;
-  const [debugPanel, setDebugPanel] = useState<'left' | 'right' | 'closed'>('closed');
-  const [debugWillCommit, setDebugWillCommit] = useState<string>('NONE');
-  const [debugLastCommit, setDebugLastCommit] = useState<string>('');
+  const [debugVisible, setDebugVisible] = useState(false);
+  const [debugState, setDebugState] = useState({
+    panel: 'closed',
+    will: 'NONE',
+    dx: 0,
+    thresholdPx: Math.round(rowWidth * commitFraction),
+    last: '',
+    dir: 'none',
+  });
 
   const thresholds = useMemo(() => {
     const reveal = rowWidth * revealFraction;
@@ -51,51 +100,34 @@ export const MyListSwipeRow: React.FC<MyListSwipeRowProps> = ({
     return { reveal, commit };
   }, [rowWidth]);
 
-  const effectiveDir = (dir: Direction): Direction => (isRTL ? (dir === 'left' ? 'right' : 'left') : dir);
-
-  const computeAction = (dir: Direction) => {
-    const eff = effectiveDir(dir);
-
-    if (tab === 'backlog') {
-      if (eff === 'left') return { label: 'Move to Active', color: '#10B981', nextStatus: 'Watching' };
-      return { label: 'Drop', color: '#EF4444', nextStatus: 'Dropped' };
-    }
-
-    if (tab === 'active') {
-      if (eff === 'left') {
-        const toPlan = !currentEpisode || currentEpisode <= 1;
-        const noWatch = !lastWatchedAt;
-        const next = toPlan && noWatch ? 'Plan to Watch' : 'On Hold';
-        return { label: next === 'Plan to Watch' ? 'Plan' : 'Pause', color: '#F59E0B', nextStatus: next };
-      }
-      return { label: 'Complete', color: '#3B82F6', nextStatus: 'Completed' };
-    }
-
-    // archive
-    if (eff === 'right') {
-      // Use Watching to avoid status constraint issues (Rewatching may not be allowed in DB)
-      return { label: 'Move Active', color: '#10B981', nextStatus: 'Watching' };
-    }
-    return { label: 'Drop', color: '#EF4444', nextStatus: 'Dropped' };
+  const physicalDir = (openDir: Direction): SwipeDir => {
+    const base: SwipeDir = openDir === 'left' ? 'rightward' : 'leftward';
+    return isRTL ? (base === 'rightward' ? 'leftward' : 'rightward') : base;
   };
 
-  const renderAction = (dir: Direction) => {
-    const action = computeAction(dir);
-    const alignStyle = dir === 'left' ? styles.actionRight : styles.actionLeft;
-    if (__DEV__) {
+  const actionForOpen = (openDir: Direction) => {
+    const phys = physicalDir(openDir);
+    return resolveAction(tab, status, phys, { completedAt, originalCompletedAt, rewatchCount });
+  };
+
+  const renderAction = (openDir: Direction) => {
+    const action = actionForOpen(openDir);
+    const alignStyle = openDir === 'left' ? styles.actionLeft : styles.actionRight;
+    const textAlign = openDir === 'left' ? styles.textLeft : styles.textRight;
+    if (DEBUG_FLAG) {
       console.log(
-        dir === 'left'
-          ? '[MyListSwipeUI] renderRightActions (revealed when finger swipes RIGHT->LEFT)'
-          : '[MyListSwipeUI] renderLeftActions (revealed when finger swipes LEFT->RIGHT)'
+        openDir === 'left'
+          ? '[MyListSwipeUI] renderLeftActions (finger L->R)'
+          : '[MyListSwipeUI] renderRightActions (finger R->L)'
       );
     }
     return (
       <View style={[styles.actionContainer, { backgroundColor: action.color }]}>
         <View style={[styles.actionContent, alignStyle]}>
-          <Text style={styles.actionLabel}>{action.label}</Text>
-          {__DEV__ && (
-            <Text style={styles.debugTiny}>
-              {dir === 'left' ? 'DEBUG: RIGHT ACTIONS (R→L)' : 'DEBUG: LEFT ACTIONS (L→R)'}
+          <Text style={[styles.actionLabel, textAlign]}>{action.label}</Text>
+          {DEBUG_FLAG && (
+            <Text style={[styles.debugTiny, textAlign]}>
+              {openDir === 'left' ? 'DEBUG: LEFT ACTIONS (L→R)' : 'DEBUG: RIGHT ACTIONS (R→L)'}
             </Text>
           )}
         </View>
@@ -103,70 +135,44 @@ export const MyListSwipeRow: React.FC<MyListSwipeRowProps> = ({
     );
   };
 
-  const handleOpen = (dir: Direction) => {
-    const action = computeAction(dir);
-    setDebugOpen(dir, action);
-    if (__DEV__) {
-      console.log('[MyListSwipe] open direction=', dir);
+  const handleOpen = (openDir: Direction) => {
+    const phys = physicalDir(openDir);
+    const action = actionForOpen(openDir);
+    const will = action.nextStatus ?? 'NONE';
+    if (DEBUG_FLAG) {
+      console.log('[MyListSwipe] open direction=', openDir, 'phys=', phys, 'action=', will, 'RTL=', isRTL);
     }
-
-    // Archive special logic
-    if (tab === 'archive') {
-      if (dir === 'left') {
-        // left swipe (open left) = drop (unless completed)
-        if (completedAt || originalCompletedAt) {
-          onCommit({ nextStatus: null, dir, reason: 'NOOP_COMPLETED' });
-          swipeableRef.current?.close();
-          return;
-        }
-        HapticFeedback.trigger('impactLight');
-        onCommit({ nextStatus: 'Dropped', dir });
-        swipeableRef.current?.close();
-        return;
-      }
-      if (dir === 'right' && action.nextStatus) {
-        // right swipe (open right) = move active
-        const nextStatus = action.nextStatus;
-        HapticFeedback.trigger('impactLight');
-        onCommit({
-          nextStatus,
-          dir,
-          forceLastWatchedNow: true,
-          ensureStartedNow: !startedAt,
-          ensureCurrentEpisodeMin1: !currentEpisode || currentEpisode < 1,
-        });
-        swipeableRef.current?.close();
-        return;
-      }
-    }
+    setDebugState((d) => ({
+      ...d,
+      panel: openDir === 'left' ? 'left' : 'right',
+      will,
+      dir: phys,
+      last: `${openDir}:${will}`,
+      thresholdPx: Math.round(rowWidth * commitFraction),
+    }));
 
     if (!action.nextStatus) {
       swipeableRef.current?.close();
-      onCommit({ nextStatus: null, dir, reason: 'NO_ACTION' });
+      onCommit({ nextStatus: null, dir: openDir, reason: 'NO_ACTION' });
       return;
     }
 
     HapticFeedback.trigger('impactLight');
-    onCommit({ nextStatus: action.nextStatus, dir });
-    swipeableRef.current?.close();
-  };
 
-  const setDebugOpen = (dir: Direction, action: { nextStatus: string | null }) => {
-    setDebugPanel(dir === 'left' ? 'left' : 'right');
-    setDebugWillCommit(action.nextStatus ?? 'NONE');
-    if (__DEV__) {
-      console.log('[MyListSwipe] commit', {
-        tab,
-        physicalGesture: dir === 'left' ? 'R→L' : 'L→R',
-        openDirection: dir,
-        action: action.nextStatus,
-        isRTL,
-      });
+    const payload: Parameters<typeof onCommit>[0] = {
+      nextStatus: action.nextStatus,
+      dir: openDir,
+    };
+
+    if (tab === 'archive' && action.nextStatus === 'Rewatching') {
+      payload.forceLastWatchedNow = true;
+      payload.ensureStartedNow = !startedAt;
+      payload.ensureCurrentEpisodeMin1 = !currentEpisode || currentEpisode < 1;
     }
-    setDebugLastCommit(`${dir}:${action.nextStatus ?? 'NONE'}`);
-    setTimeout(() => {
-      setDebugPanel('closed');
-    }, 1200);
+
+    onCommit(payload);
+    swipeableRef.current?.close();
+    setTimeout(() => setDebugState((d) => ({ ...d, panel: 'closed' })), 1200);
   };
 
   const onLayout = (e: LayoutChangeEvent) => {
@@ -182,24 +188,27 @@ export const MyListSwipeRow: React.FC<MyListSwipeRowProps> = ({
       rightThreshold={thresholds.commit}
       onSwipeableOpen={(direction) => {
         if (direction === 'left' || direction === 'right') {
-          handleOpen(direction === 'left' ? 'left' : 'right');
+          handleOpen(direction);
         }
       }}
       overshootLeft={false}
       overshootRight={false}
       containerStyle={styles.swipeContainer}
       childrenContainerStyle={styles.childrenContainer}
+      onSwipeableWillOpen={() => setDebugVisible(true)}
+      onSwipeableClose={() => setDebugVisible(false)}
     >
       <View onLayout={onLayout}>
         {children}
-        {__DEV__ && (
+        {DEBUG_FLAG && debugVisible && (
           <View style={styles.debugOverlay} pointerEvents="none">
             <Text style={styles.debugText}>
-              RTL:{String(isRTL)} panel:{debugPanel} will:{debugWillCommit}
+              tab:{tab} status:{status}
             </Text>
-            {debugLastCommit ? (
-              <Text style={styles.debugText}>last:{debugLastCommit}</Text>
-            ) : null}
+            <Text style={styles.debugText}>
+              dir:{debugState.dir} will:{debugState.will} thrPx:{debugState.thresholdPx}
+            </Text>
+            {debugState.last ? <Text style={styles.debugText}>last:{debugState.last}</Text> : null}
           </View>
         )}
       </View>
@@ -227,6 +236,12 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     fontSize: 15,
   },
+  textLeft: {
+    textAlign: 'left',
+  },
+  textRight: {
+    textAlign: 'right',
+  },
   actionLeft: {
     flex: 1,
     justifyContent: 'center',
@@ -247,7 +262,7 @@ const styles = StyleSheet.create({
   debugOverlay: {
     position: 'absolute',
     top: 6,
-    left: 6,
+    right: 6,
     backgroundColor: 'rgba(0,0,0,0.55)',
     paddingVertical: 4,
     paddingHorizontal: 6,
