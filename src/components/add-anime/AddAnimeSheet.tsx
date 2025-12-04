@@ -1,12 +1,13 @@
 import React, { useRef, useState, useCallback, useEffect } from 'react';
-import { View, Text, TextInput, FlatList, StyleSheet, Pressable } from 'react-native';
+import { View, Text, TextInput, StyleSheet, Pressable } from 'react-native';
 import BottomSheet, { BottomSheetBackdrop, BottomSheetView } from '@gorhom/bottom-sheet';
 import type { BottomSheetBackdropProps } from '@gorhom/bottom-sheet';
 import { supabase, whenAuthed } from '../../db/supabaseClient';
 import { useAnimeSearch } from '../../hooks/useAnimeSearch';
 import { useAddToList } from '../../hooks/useAddToList';
 import { useInvalidateSearchCache } from '../../hooks/useInvalidateSearchCache';
-import { SearchResultRow } from './SearchResultRow';
+import { SearchDropdown } from './SearchDropdown';
+import { AnimeActionModal } from './AnimeActionModal';
 import HapticFeedback from 'react-native-haptic-feedback';
 
 interface AddAnimeSheetProps {
@@ -18,6 +19,8 @@ export const AddAnimeSheet = React.forwardRef<BottomSheet, AddAnimeSheetProps>(
   ({ isOpen, onClose }, ref) => {
     const [userId, setUserId] = useState<string | null>(null);
     const [searchQuery, setSearchQuery] = useState('');
+    const [selectedAnime, setSelectedAnime] = useState<any>(null);
+    const [showActionModal, setShowActionModal] = useState(false);
     const inputRef = useRef<TextInput>(null);
 
     // Get user ID
@@ -35,6 +38,11 @@ export const AddAnimeSheet = React.forwardRef<BottomSheet, AddAnimeSheetProps>(
     const addToListMutation = useAddToList();
     const invalidateSearchCache = useInvalidateSearchCache();
 
+    const handleSelectResult = useCallback((anime: any) => {
+      setSelectedAnime(anime);
+      setShowActionModal(true);
+    }, []);
+
     const handleSheetChange = useCallback((index: number) => {
       if (index === -1) {
         // Sheet closed
@@ -49,26 +57,31 @@ export const AddAnimeSheet = React.forwardRef<BottomSheet, AddAnimeSheetProps>(
     }, [onClose]);
 
     const handleAddToList = useCallback(
-      (anime: { id: string; title: string; episodes_count: number | null }, status: 'Plan to Watch' | 'Watching') => {
-        if (!userId) return;
+      (status: 'Plan to Watch' | 'Watching') => {
+        if (!userId || !selectedAnime) return;
 
         addToListMutation.mutate(
           {
             userId,
-            animeId: anime.id,
+            animeId: selectedAnime.id,
             status,
-            episodesCount: anime.episodes_count,
+            episodesCount: selectedAnime.episodes_count,
           },
           {
             onSuccess: () => {
               const action = status === 'Watching' ? 'Started watching' : 'Added to backlog';
-              console.log(`✅ ${action}: ${anime.title}`);
+              console.log(`✅ ${action}: ${selectedAnime.title}`);
+              // Close modal after successful add
+              setShowActionModal(false);
+              setSelectedAnime(null);
+              // Clear search
+              setSearchQuery('');
               // TODO: Show success toast
             },
           }
         );
       },
-      [userId, addToListMutation]
+      [userId, selectedAnime, addToListMutation]
     );
 
     const renderBackdrop = useCallback(
@@ -87,124 +100,109 @@ export const AddAnimeSheet = React.forwardRef<BottomSheet, AddAnimeSheetProps>(
       [onClose]
     );
 
-    const renderEmptyState = () => {
-      if (searchQuery.length < 2) {
-        return (
-          <View style={styles.emptyState}>
-            <Text style={styles.emptyIcon}>🔍</Text>
-            <Text style={styles.emptyTitle}>Search for anime</Text>
-            <Text style={styles.emptySubtitle}>
-              Type at least 2 characters to search
-            </Text>
-          </View>
-        );
-      }
-
-      if (isLoading) {
-        return (
-          <View style={styles.emptyState}>
-            <Text style={styles.emptySubtitle}>Searching...</Text>
-          </View>
-        );
-      }
-
-      if (!searchResults || searchResults.length === 0) {
-        return (
-          <View style={styles.emptyState}>
-            <Text style={styles.emptyIcon}>😕</Text>
-            <Text style={styles.emptyTitle}>No results</Text>
-            <Text style={styles.emptySubtitle}>
-              Try a different search term
-            </Text>
-          </View>
-        );
-      }
-
-      return null;
-    };
-
     return (
-      <BottomSheet
-        ref={ref}
-        index={-1}
-        snapPoints={['50%', '90%']}
-        enablePanDownToClose
-        onChange={handleSheetChange}
-        backdropComponent={renderBackdrop}
-        backgroundStyle={styles.background}
-        handleIndicatorStyle={styles.indicator}
-      >
-        <BottomSheetView style={styles.content}>
-          {/* Header */}
-          <View style={styles.header}>
-            <Text style={styles.title}>Add Anime</Text>
-            <View style={styles.headerActions}>
-              {/* Debug: Clear cache button (remove in production) */}
-              <Pressable
-                onPress={() => {
-                  HapticFeedback.trigger('impactMedium');
-                  invalidateSearchCache();
-                  console.log('[AddAnimeSheet] 🗑️ Cache cleared manually');
-                }}
-                style={styles.debugButton}
-              >
-                <Text style={styles.debugButtonText}>🗑️</Text>
-              </Pressable>
-              <Pressable
-                onPress={() => {
-                  HapticFeedback.trigger('impactLight');
-                  onClose();
-                }}
-                style={styles.closeButton}
-              >
-                <Text style={styles.closeButtonText}>✕</Text>
-              </Pressable>
+      <>
+        <BottomSheet
+          ref={ref}
+          index={-1}
+          snapPoints={['50%']}
+          enablePanDownToClose
+          onChange={handleSheetChange}
+          backdropComponent={renderBackdrop}
+          backgroundStyle={styles.background}
+          handleIndicatorStyle={styles.indicator}
+        >
+          <BottomSheetView style={styles.content}>
+            {/* Header */}
+            <View style={styles.header}>
+              <Text style={styles.title}>Add Anime</Text>
+              <View style={styles.headerActions}>
+                {/* Debug: Clear cache button (remove in production) */}
+                <Pressable
+                  onPress={() => {
+                    HapticFeedback.trigger('impactMedium');
+                    invalidateSearchCache();
+                    console.log('[AddAnimeSheet] 🗑️ Cache cleared manually');
+                  }}
+                  style={styles.debugButton}
+                >
+                  <Text style={styles.debugButtonText}>🗑️</Text>
+                </Pressable>
+                <Pressable
+                  onPress={() => {
+                    HapticFeedback.trigger('impactLight');
+                    onClose();
+                  }}
+                  style={styles.closeButton}
+                >
+                  <Text style={styles.closeButtonText}>✕</Text>
+                </Pressable>
+              </View>
             </View>
-          </View>
 
-          {/* Search Input */}
-          <View style={styles.searchContainer}>
-            <Text style={styles.searchIcon}>🔍</Text>
-            <TextInput
-              ref={inputRef}
-              style={styles.searchInput}
-              placeholder="Search anime..."
-              placeholderTextColor="#86868B"
-              value={searchQuery}
-              onChangeText={setSearchQuery}
-              autoCapitalize="none"
-              autoCorrect={false}
-              returnKeyType="search"
-            />
-            {searchQuery.length > 0 && (
-              <Pressable
-                onPress={() => setSearchQuery('')}
-                style={styles.clearButton}
-              >
-                <Text style={styles.clearButtonText}>✕</Text>
-              </Pressable>
-            )}
-          </View>
+            {/* Search Input Container (relative positioning for dropdown) */}
+            <View style={styles.searchWrapper}>
+              <View style={styles.searchContainer}>
+                <Text style={styles.searchIcon}>🔍</Text>
+                <TextInput
+                  ref={inputRef}
+                  style={styles.searchInput}
+                  placeholder="Search anime..."
+                  placeholderTextColor="#86868B"
+                  value={searchQuery}
+                  onChangeText={setSearchQuery}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  returnKeyType="search"
+                />
+                {searchQuery.length > 0 && (
+                  <Pressable
+                    onPress={() => setSearchQuery('')}
+                    style={styles.clearButton}
+                  >
+                    <Text style={styles.clearButtonText}>✕</Text>
+                  </Pressable>
+                )}
+              </View>
 
-          {/* Results */}
-          {renderEmptyState() || (
-            <FlatList
-              data={searchResults}
-              keyExtractor={(item) => item.id}
-              renderItem={({ item }) => (
-                <SearchResultRow
-                  anime={item}
-                  onSave={() => handleAddToList(item, 'Plan to Watch')}
-                  onStart={() => handleAddToList(item, 'Watching')}
-                  isAdding={addToListMutation.isPending}
+              {/* Dropdown appears below search bar */}
+              {searchQuery.length >= 2 && (
+                <SearchDropdown
+                  results={searchResults || []}
+                  isLoading={isLoading}
+                  onSelectResult={handleSelectResult}
+                  searchQuery={searchQuery}
+                  maxResults={8}
                 />
               )}
-              contentContainerStyle={styles.resultsList}
-              showsVerticalScrollIndicator={false}
-            />
-          )}
-        </BottomSheetView>
-      </BottomSheet>
+            </View>
+
+            {/* Empty state when no search query */}
+            {searchQuery.length < 2 && (
+              <View style={styles.emptyState}>
+                <Text style={styles.emptyIcon}>🔍</Text>
+                <Text style={styles.emptyTitle}>Search for anime</Text>
+                <Text style={styles.emptySubtitle}>
+                  Type at least 2 characters to see suggestions
+                </Text>
+              </View>
+            )}
+          </BottomSheetView>
+        </BottomSheet>
+
+        {/* Action modal */}
+        <AnimeActionModal
+          visible={showActionModal}
+          anime={selectedAnime}
+          onClose={() => {
+            setShowActionModal(false);
+            setSelectedAnime(null);
+          }}
+          onSave={() => handleAddToList('Plan to Watch')}
+          onStart={() => handleAddToList('Watching')}
+          isAdding={addToListMutation.isPending}
+        />
+      </>
     );
   }
 );
@@ -260,6 +258,10 @@ const styles = StyleSheet.create({
     fontSize: 18,
     color: '#86868B',
   },
+  searchWrapper: {
+    position: 'relative',
+    marginBottom: 20,
+  },
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -267,7 +269,6 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     paddingHorizontal: 16,
     paddingVertical: 12,
-    marginBottom: 20,
   },
   searchIcon: {
     fontSize: 18,
@@ -287,9 +288,6 @@ const styles = StyleSheet.create({
   clearButtonText: {
     fontSize: 16,
     color: '#86868B',
-  },
-  resultsList: {
-    paddingBottom: 40,
   },
   emptyState: {
     flex: 1,
