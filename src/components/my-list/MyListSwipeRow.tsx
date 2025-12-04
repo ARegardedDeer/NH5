@@ -6,6 +6,11 @@ import { UserListStatus } from '../../constants/userListStatus';
 
 type Direction = 'left' | 'right'; // Swipeable open direction
 type SwipeDir = 'leftward' | 'rightward'; // physical gesture
+const getActiveRightSwipeStatus = (currentEpisode: number | null | undefined): UserListStatus => {
+  const ep = typeof currentEpisode === 'number' ? currentEpisode : 1;
+  // Treat 1.5+ as started/paused
+  return ep >= 1.5 ? 'On Hold' : 'Plan to Watch';
+};
 
 export interface MyListSwipeRowProps {
   tab: 'active' | 'backlog' | 'archive';
@@ -35,7 +40,12 @@ const resolveAction = (
   tab: 'active' | 'backlog' | 'archive',
   status: string,
   swipeDir: SwipeDir,
-  ctx: { completedAt?: string | null; originalCompletedAt?: string | null; rewatchCount?: number | null }
+  ctx: {
+    completedAt?: string | null;
+    originalCompletedAt?: string | null;
+    rewatchCount?: number | null;
+    currentEpisode?: number | null;
+  }
 ) => {
   const completedBefore =
     !!ctx.completedAt || !!ctx.originalCompletedAt || (ctx.rewatchCount ?? 0) > 0;
@@ -63,6 +73,15 @@ const resolveAction = (
         return { label: 'Rewatch', color: '#3B82F6', nextStatus: 'Rewatching' };
       }
       return { label: 'No Action', color: '#4B5563', nextStatus: null };
+    }
+    return { label: 'No Action', color: '#4B5563', nextStatus: null };
+  }
+
+  if (tab === 'active') {
+    if (swipeDir === 'rightward') {
+      const target = getActiveRightSwipeStatus(ctx.currentEpisode);
+      const label = target === 'Plan to Watch' ? 'BACKLOG (PLAN)' : 'BACKLOG (PAUSED)';
+      return { label, color: '#6366F1', nextStatus: target };
     }
     return { label: 'No Action', color: '#4B5563', nextStatus: null };
   }
@@ -108,7 +127,12 @@ export const MyListSwipeRow: React.FC<MyListSwipeRowProps> = ({
 
   const actionForOpen = (openDir: Direction) => {
     const phys = physicalDir(openDir);
-    return resolveAction(tab, status, phys, { completedAt, originalCompletedAt, rewatchCount });
+    return resolveAction(tab, status, phys, {
+      completedAt,
+      originalCompletedAt,
+      rewatchCount,
+      currentEpisode,
+    });
   };
 
   const renderAction = (openDir: Direction) => {
@@ -169,6 +193,16 @@ export const MyListSwipeRow: React.FC<MyListSwipeRowProps> = ({
       payload.forceLastWatchedNow = true;
       payload.ensureStartedNow = !startedAt;
       payload.ensureCurrentEpisodeMin1 = !currentEpisode || currentEpisode < 1;
+    }
+
+    if (DEBUG_FLAG) {
+      console.log('[MyListSwipe] commit', {
+        tab,
+        dir: openDir,
+        currentEpisode,
+        nextStatus: action.nextStatus,
+        dx: 'n/a',
+      });
     }
 
     onCommit(payload);

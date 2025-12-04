@@ -91,8 +91,16 @@ export const useUpdateListStatus = () => {
         .single();
 
       if (error) {
-        console.error('[MyListSwipe] Update error:', error);
-        throw error;
+        console.error('[MyListSwipe] Update error raw:', error);
+        let friendly = 'Request failed. Please try again.';
+        if ((error as any)?.code === '23514') {
+          friendly =
+            "Can’t move item: status value isn’t allowed by the database. (Have you applied the latest migration?)";
+        } else if ((error as any)?.code) {
+          friendly = `Request failed (code ${(error as any).code}). Please try again.`;
+        }
+        const context = `status=${newStatus}, animeId=${animeId}, userId=${userId}`;
+        throw new Error(`[MyListStatus] ${friendly} (${context})`);
       }
 
       return data;
