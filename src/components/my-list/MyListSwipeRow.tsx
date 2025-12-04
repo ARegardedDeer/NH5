@@ -52,7 +52,7 @@ const resolveAction = (
 
   if (tab === 'backlog') {
     if (swipeDir === 'leftward') {
-      return { label: 'Move Active', color: '#10B981', nextStatus: 'Watching' };
+      return { label: 'MOVE ACTIVE', color: '#10B981', nextStatus: 'Watching' };
     }
     return {
       label: completedBefore ? 'Archive (Completed)' : 'Archive (Drop)',
@@ -62,13 +62,17 @@ const resolveAction = (
   }
 
   if (tab === 'archive') {
-    if (status === 'Dropped') {
-      return { label: 'BACKLOG (PLAN)', color: '#6366F1', nextStatus: 'Plan to Watch' };
+    // Archive: LEFT-ward (R→L finger swipe) = GREEN MOVE ACTIVE
+    if (swipeDir === 'leftward') {
+      // Move back to Active: Rewatching if completed before, else Watching
+      const nextStatus = completedBefore ? 'Rewatching' : 'Watching';
+      return { label: 'MOVE ACTIVE', color: '#10B981', nextStatus };
     }
-    if (status === 'Completed') {
-      return { label: 'REWATCH', color: '#10B981', nextStatus: 'Rewatching' };
+    // Archive: RIGHT-ward (L→R finger swipe) = RED DROP (unless completed)
+    if (completedBefore) {
+      return { label: 'Already Completed', color: '#4B5563', nextStatus: null, reason: 'NOOP_COMPLETED' };
     }
-    return { label: 'No Action', color: '#4B5563', nextStatus: null };
+    return { label: 'DROP', color: '#EF4444', nextStatus: 'Dropped' };
   }
 
   if (tab === 'active') {
@@ -172,7 +176,8 @@ export const MyListSwipeRow: React.FC<MyListSwipeRowProps> = ({
 
     if (!action.nextStatus) {
       swipeableRef.current?.close();
-      onCommit({ nextStatus: null, dir: openDir, reason: 'NO_ACTION' });
+      // @ts-ignore - reason field exists on action
+      onCommit({ nextStatus: null, dir: openDir, reason: action.reason || 'NO_ACTION' });
       return;
     }
 
