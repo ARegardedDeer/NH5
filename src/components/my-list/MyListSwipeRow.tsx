@@ -8,8 +8,8 @@ type Direction = 'left' | 'right'; // Swipeable open direction
 type SwipeDir = 'leftward' | 'rightward'; // physical gesture
 const getActiveRightSwipeStatus = (currentEpisode: number | null | undefined): UserListStatus => {
   const ep = typeof currentEpisode === 'number' ? currentEpisode : 1;
-  // Treat 1.5+ as started/paused
-  return ep >= 1.5 ? 'On Hold' : 'Plan to Watch';
+  // Treat >1 as started/paused
+  return ep > 1 ? 'On Hold' : 'Plan to Watch';
 };
 
 export interface MyListSwipeRowProps {
@@ -63,16 +63,10 @@ const resolveAction = (
 
   if (tab === 'archive') {
     if (status === 'Dropped') {
-      if (swipeDir === 'leftward') {
-        return { label: 'Backlog', color: '#10B981', nextStatus: 'Plan to Watch' };
-      }
-      return { label: 'No Action', color: '#4B5563', nextStatus: null };
+      return { label: 'BACKLOG (PLAN)', color: '#6366F1', nextStatus: 'Plan to Watch' };
     }
     if (status === 'Completed') {
-      if (swipeDir === 'rightward') {
-        return { label: 'Rewatch', color: '#3B82F6', nextStatus: 'Rewatching' };
-      }
-      return { label: 'No Action', color: '#4B5563', nextStatus: null };
+      return { label: 'REWATCH', color: '#10B981', nextStatus: 'Rewatching' };
     }
     return { label: 'No Action', color: '#4B5563', nextStatus: null };
   }
@@ -198,6 +192,7 @@ export const MyListSwipeRow: React.FC<MyListSwipeRowProps> = ({
     if (DEBUG_FLAG) {
       console.log('[MyListSwipe] commit', {
         tab,
+        status,
         dir: openDir,
         currentEpisode,
         nextStatus: action.nextStatus,

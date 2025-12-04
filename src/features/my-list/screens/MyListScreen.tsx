@@ -549,6 +549,7 @@ export const MyListScreen = () => {
         visible={!!undoState?.visible}
         message={undoState?.message || ''}
         onUndo={handleUndo}
+        onHide={() => setUndoState(null)}
       />
     </SafeAreaView>
   );

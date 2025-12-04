@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -9,8 +9,27 @@ interface UndoToastProps {
   onHide?: () => void;
 }
 
-export const UndoToast: React.FC<UndoToastProps> = ({ message, visible, onUndo }) => {
+export const UndoToast: React.FC<UndoToastProps> = ({ message, visible, onUndo, onHide }) => {
   const insets = useSafeAreaInsets();
+  const timerRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    if (visible) {
+      if (timerRef.current) {
+        clearTimeout(timerRef.current);
+      }
+      timerRef.current = setTimeout(() => {
+        onHide?.();
+      }, 4000);
+    }
+
+    return () => {
+      if (timerRef.current) {
+        clearTimeout(timerRef.current);
+        timerRef.current = null;
+      }
+    };
+  }, [visible, onHide]);
 
   if (!visible) return null;
 
@@ -20,7 +39,13 @@ export const UndoToast: React.FC<UndoToastProps> = ({ message, visible, onUndo }
         <Text style={styles.message} numberOfLines={2}>
           {message}
         </Text>
-        <Pressable style={styles.undoButton} onPress={onUndo}>
+        <Pressable
+          style={styles.undoButton}
+          onPress={() => {
+            onUndo();
+            onHide?.();
+          }}
+        >
           <Text style={styles.undoText}>Undo</Text>
         </Pressable>
       </View>
