@@ -121,12 +121,13 @@ AS $$
     sr.genres,
     sr.synopsis,
     sr.episodes_count,
-    -- Final score = base relevance + popularity bonus
-    (sr.base_relevance_score + sr.popularity_bonus) AS relevance_score
+    -- Final score = base relevance + (popularity bonus × 5)
+    -- This gives popularity significant weight (0-500 range vs 0-1000 base)
+    (sr.base_relevance_score + (sr.popularity_bonus * 5)) AS relevance_score
   FROM scored_results sr
   ORDER BY
-    (sr.base_relevance_score + sr.popularity_bonus) DESC,  -- Best matches + most popular first
-    sr.title ASC                                            -- Alphabetical within same score
+    (sr.base_relevance_score + (sr.popularity_bonus * 5)) DESC,  -- Best matches + strongly boosted popularity
+    sr.title ASC                                                   -- Alphabetical within same score
   LIMIT 20;
 $$;
 
