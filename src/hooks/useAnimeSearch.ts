@@ -14,6 +14,7 @@ interface AnimeSearchResult {
   genres: string[] | null;
   synopsis: string | null;
   episodes_count: number | null;
+  relevance_score?: number; // Optional: only present with migration 007+
 }
 
 export const useAnimeSearch = (
@@ -66,7 +67,16 @@ export const useAnimeSearch = (
       // Log first result for debugging
       if (data && data.length > 0) {
         console.log('[useAnimeSearch] Top result:', data[0].title);
+        console.log('[useAnimeSearch] Relevance score:', data[0].relevance_score || 'N/A');
         console.log('[useAnimeSearch] First result shape:', Object.keys(data[0]));
+
+        // Log top 3 with scores for debugging ranking
+        if (data.length > 1) {
+          console.log('[useAnimeSearch] Top 3 results:');
+          data.slice(0, 3).forEach((item: AnimeSearchResult, idx: number) => {
+            console.log(`  ${idx + 1}. ${item.title} (score: ${item.relevance_score || 'N/A'})`);
+          });
+        }
       }
 
       return data || [];
