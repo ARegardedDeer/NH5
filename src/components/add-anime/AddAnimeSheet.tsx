@@ -47,15 +47,21 @@ export const AddAnimeSheet = React.forwardRef<BottomSheet, AddAnimeSheetProps>(
     }, [onClose]);
 
     const handleAddToList = useCallback(
-      (animeId: string, status: 'Plan to Watch' | 'Watching') => {
+      (anime: { id: string; title: string; episodes_count: number | null }, status: 'Plan to Watch' | 'Watching') => {
         if (!userId) return;
 
         addToListMutation.mutate(
-          { userId, animeId, status },
+          {
+            userId,
+            animeId: anime.id,
+            status,
+            episodesCount: anime.episodes_count,
+          },
           {
             onSuccess: () => {
-              // Show success toast (to be implemented)
-              console.log(`Added to ${status}`);
+              const action = status === 'Watching' ? 'Started watching' : 'Added to backlog';
+              console.log(`✅ ${action}: ${anime.title}`);
+              // TODO: Show success toast
             },
           }
         );
@@ -173,8 +179,8 @@ export const AddAnimeSheet = React.forwardRef<BottomSheet, AddAnimeSheetProps>(
               renderItem={({ item }) => (
                 <SearchResultRow
                   anime={item}
-                  onSave={() => handleAddToList(item.id, 'Plan to Watch')}
-                  onStart={() => handleAddToList(item.id, 'Watching')}
+                  onSave={() => handleAddToList(item, 'Plan to Watch')}
+                  onStart={() => handleAddToList(item, 'Watching')}
                   isAdding={addToListMutation.isPending}
                 />
               )}

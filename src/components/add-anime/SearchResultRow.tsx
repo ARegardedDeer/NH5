@@ -9,7 +9,7 @@ interface SearchResultRowProps {
     id: string;
     title: string;
     thumbnail_url: string | null;
-    tags: string[] | null;
+    genres: string[] | null;
   };
   onSave: () => void;
   onStart: () => void;
@@ -25,7 +25,7 @@ export const SearchResultRow: React.FC<SearchResultRowProps> = ({
   const saveAnim = useButtonPress();
   const startAnim = useButtonPress();
 
-  const genres = anime.tags?.slice(0, 3).join(', ') || 'Unknown';
+  const genres = anime.genres?.slice(0, 3).join(', ') || 'Unknown';
 
   const handleSave = () => {
     HapticFeedback.trigger('impactLight');

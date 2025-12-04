@@ -1,5 +1,99 @@
 {
-  "bullets": {},
-  "nextId": 1,
-  "sections": {}
+  "bullets": {
+    "ui-00001": {
+      "id": "ui-00001",
+      "metadata": {
+        "relatedFiles": [],
+        "tags": [
+          "manual"
+        ],
+        "timestamp": "2025-12-04T07:03:01.979Z"
+      },
+      "section": "UI Components"
+    },
+    "best-00002": {
+      "id": "best-00002",
+      "metadata": {
+        "relatedFiles": [],
+        "tags": [
+          "manual"
+        ],
+        "timestamp": "2025-12-04T07:03:09.045Z"
+      },
+      "section": "Best Practices"
+    },
+    "best-00003": {
+      "id": "best-00003",
+      "metadata": {
+        "relatedFiles": [],
+        "tags": [
+          "manual"
+        ],
+        "timestamp": "2025-12-04T07:03:17.950Z"
+      },
+      "section": "Best Practices"
+    },
+    "architecture-00004": {
+      "id": "architecture-00004",
+      "metadata": {
+        "relatedFiles": [],
+        "tags": [
+          "manual"
+        ],
+        "timestamp": "2025-12-04T07:03:26.950Z"
+      },
+      "section": "Architecture"
+    },
+    "architecture-00005": {
+      "id": "architecture-00005",
+      "metadata": {
+        "relatedFiles": [],
+        "tags": [
+          "manual"
+        ],
+        "timestamp": "2025-12-04T07:03:34.235Z"
+      },
+      "section": "Architecture"
+    },
+    "best-00006": {
+      "id": "best-00006",
+      "metadata": {
+        "relatedFiles": [],
+        "tags": [
+          "manual"
+        ],
+        "timestamp": "2025-12-04T07:03:40.661Z"
+      },
+      "section": "Best Practices"
+    },
+    "lessons-00007": {
+      "id": "lessons-00007",
+      "metadata": {
+        "relatedFiles": [],
+        "tags": [
+          "manual"
+        ],
+        "timestamp": "2025-12-04T07:03:46.085Z"
+      },
+      "section": "Lessons Learned"
+    }
+  },
+  "nextId": 8,
+  "sections": {
+    "UI Components": [
+      "ui-00001"
+    ],
+    "Best Practices": [
+      "best-00002",
+      "best-00003",
+      "best-00006"
+    ],
+    "Architecture": [
+      "architecture-00004",
+      "architecture-00005"
+    ],
+    "Lessons Learned": [
+      "lessons-00007"
+    ]
+  }
 }

@@ -1,47 +1,65 @@
+import { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '../db/supabaseClient';
+
+interface UseAnimeSearchOptions {
+  enabled?: boolean;
+  debounceMs?: number;
+}
 
 interface AnimeSearchResult {
   id: string;
   title: string;
   thumbnail_url: string | null;
-  tags: string[] | null;
+  genres: string[] | null;
   synopsis: string | null;
   episodes_count: number | null;
 }
 
-export const useAnimeSearch = (query: string, options?: { enabled?: boolean }) => {
-  const trimmedQuery = query.trim();
-  const shouldSearch = trimmedQuery.length >= 2;
+export const useAnimeSearch = (
+  searchQuery: string,
+  { enabled = true, debounceMs = 300 }: UseAnimeSearchOptions = {}
+) => {
+  const [debouncedQuery, setDebouncedQuery] = useState(searchQuery);
 
-  return useQuery({
-    queryKey: ['anime-search', trimmedQuery],
+  // Debounce search query
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedQuery(searchQuery);
+    }, debounceMs);
+
+    return () => clearTimeout(timer);
+  }, [searchQuery, debounceMs]);
+
+  return useQuery<AnimeSearchResult[]>({
+    queryKey: ['anime-search', debouncedQuery],
     queryFn: async () => {
-      if (!shouldSearch) {
+      // Don't search if query is too short
+      if (!debouncedQuery || debouncedQuery.length < 2) {
         return [];
       }
 
-      console.log('[anime-search] Searching for:', trimmedQuery);
+      console.log('[useAnimeSearch] Smart search for:', debouncedQuery);
 
-      // Search anime by title (case-insensitive partial match)
+      // Call the hybrid search function
       const { data, error } = await supabase
-        .from('anime')
-        .select('id, title, thumbnail_url, tags, synopsis, episodes_count')
-        .ilike('title', `%${trimmedQuery}%`)
-        .not('thumbnail_url', 'is', null) // Prefer anime with images
-        .limit(20)
-        .order('title', { ascending: true });
+        .rpc('search_anime', { search_term: debouncedQuery });
 
       if (error) {
-        console.error('[anime-search] Error:', error);
+        console.error('[useAnimeSearch] Error:', error);
         throw error;
       }
 
-      console.log('[anime-search] Found', data?.length || 0, 'results');
-      return (data || []) as AnimeSearchResult[];
+      console.log('[useAnimeSearch] Found', data?.length || 0, 'results');
+
+      // Log first result for debugging
+      if (data && data.length > 0) {
+        console.log('[useAnimeSearch] Top result:', data[0].title);
+      }
+
+      return data || [];
     },
-    enabled: shouldSearch && (options?.enabled !== false),
-    staleTime: 1000 * 60 * 5, // 5 minutes
-    gcTime: 1000 * 60 * 10, // 10 minutes
+    enabled: enabled && debouncedQuery.length >= 2,
+    staleTime: 5 * 60 * 1000, // 5 minutes
   });
 };
