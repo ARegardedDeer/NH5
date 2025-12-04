@@ -5,6 +5,7 @@ import type { BottomSheetBackdropProps } from '@gorhom/bottom-sheet';
 import { supabase, whenAuthed } from '../../db/supabaseClient';
 import { useAnimeSearch } from '../../hooks/useAnimeSearch';
 import { useAddToList } from '../../hooks/useAddToList';
+import { useInvalidateSearchCache } from '../../hooks/useInvalidateSearchCache';
 import { SearchResultRow } from './SearchResultRow';
 import HapticFeedback from 'react-native-haptic-feedback';
 
@@ -32,6 +33,7 @@ export const AddAnimeSheet = React.forwardRef<BottomSheet, AddAnimeSheetProps>(
     });
 
     const addToListMutation = useAddToList();
+    const invalidateSearchCache = useInvalidateSearchCache();
 
     const handleSheetChange = useCallback((index: number) => {
       if (index === -1) {
@@ -136,15 +138,28 @@ export const AddAnimeSheet = React.forwardRef<BottomSheet, AddAnimeSheetProps>(
           {/* Header */}
           <View style={styles.header}>
             <Text style={styles.title}>Add Anime</Text>
-            <Pressable
-              onPress={() => {
-                HapticFeedback.trigger('impactLight');
-                onClose();
-              }}
-              style={styles.closeButton}
-            >
-              <Text style={styles.closeButtonText}>✕</Text>
-            </Pressable>
+            <View style={styles.headerActions}>
+              {/* Debug: Clear cache button (remove in production) */}
+              <Pressable
+                onPress={() => {
+                  HapticFeedback.trigger('impactMedium');
+                  invalidateSearchCache();
+                  console.log('[AddAnimeSheet] 🗑️ Cache cleared manually');
+                }}
+                style={styles.debugButton}
+              >
+                <Text style={styles.debugButtonText}>🗑️</Text>
+              </Pressable>
+              <Pressable
+                onPress={() => {
+                  HapticFeedback.trigger('impactLight');
+                  onClose();
+                }}
+                style={styles.closeButton}
+              >
+                <Text style={styles.closeButtonText}>✕</Text>
+              </Pressable>
+            </View>
           </View>
 
           {/* Search Input */}
@@ -216,6 +231,22 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: '700',
     color: '#FFFFFF',
+  },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  debugButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#7C3AED',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  debugButtonText: {
+    fontSize: 14,
   },
   closeButton: {
     width: 32,
