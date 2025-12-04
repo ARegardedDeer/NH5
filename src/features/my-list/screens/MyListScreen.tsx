@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, ScrollView, StyleSheet, FlatList, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, { FadeIn, FadeOut, Layout } from 'react-native-reanimated';
 import { useNavigation } from '@react-navigation/native';
+import BottomSheet from '@gorhom/bottom-sheet';
 import { supabase, whenAuthed } from '../../../db/supabaseClient';
 import { useActiveAnime } from '../../../hooks/useActiveAnime';
 import { useMyListByStatus } from '../../../hooks/useMyListByStatus';
@@ -14,6 +15,8 @@ import { ActiveRow } from '../../../components/my-list/ActiveRow';
 import { ListRow } from '../../../components/my-list/ListRow';
 import { MyListSwipeRow } from '../../../components/my-list/MyListSwipeRow';
 import UndoToast from '../../../components/common/UndoToast';
+import { FloatingActionButton } from '../../../components/shared/FloatingActionButton';
+import { AddAnimeSheet } from '../../../components/add-anime/AddAnimeSheet';
 import HapticFeedback from 'react-native-haptic-feedback';
 import { AppNavigationProp } from '../../../types/navigation';
 import { useUpdateListStatus } from '../../../hooks/useUpdateListStatus';
@@ -42,8 +45,10 @@ export const MyListScreen = () => {
   const [backlogFilter, setBacklogFilter] = useState<BacklogFilter>('want');
   const [archiveFilter, setArchiveFilter] = useState<ArchiveFilter>('completed');
   const [updatingItem, setUpdatingItem] = useState<ActiveItem | null>(null);
+  const [isAddSheetOpen, setIsAddSheetOpen] = useState(false);
   const navigation = useNavigation<AppNavigationProp>();
   const updateStatusMutation = useUpdateListStatus();
+  const addSheetRef = useRef<BottomSheet>(null);
   const [undoState, setUndoState] = useState<{
     visible: boolean;
     message: string;
@@ -196,6 +201,16 @@ export const MyListScreen = () => {
 
   const handleInfo = (animeId: string, title?: string) => {
     navigateToAnimeDetail(navigation, animeId, title);
+  };
+
+  const handleOpenAddSheet = () => {
+    setIsAddSheetOpen(true);
+    addSheetRef.current?.expand();
+  };
+
+  const handleCloseAddSheet = () => {
+    setIsAddSheetOpen(false);
+    addSheetRef.current?.close();
   };
 
   const renderBacklogContent = () => {
@@ -550,6 +565,19 @@ export const MyListScreen = () => {
         message={undoState?.message || ''}
         onUndo={handleUndo}
         onHide={() => setUndoState(null)}
+      />
+
+      {/* Floating Action Button */}
+      <FloatingActionButton
+        onPress={handleOpenAddSheet}
+        isExpanded={isAddSheetOpen}
+      />
+
+      {/* Add Anime Bottom Sheet */}
+      <AddAnimeSheet
+        ref={addSheetRef}
+        isOpen={isAddSheetOpen}
+        onClose={handleCloseAddSheet}
       />
     </SafeAreaView>
   );
