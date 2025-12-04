@@ -1,10 +1,11 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../db/supabaseClient';
+import { assertUserListStatus, UserListStatus } from '../constants/userListStatus';
 
 type UpdateStatusParams = {
   userId: string;
   animeId: string;
-  newStatus: string;
+  newStatus: UserListStatus;
   overrideCompletedAt?: string | null;
   overrideOriginalCompletedAt?: string | null;
   overrideLastWatchedAt?: string | null;
@@ -29,6 +30,9 @@ export const useUpdateListStatus = () => {
         overrideOriginalCompletedAt,
         overrideLastWatchedAt,
       } = params;
+
+      assertUserListStatus(newStatus);
+      console.log('[MyListStatus] updating', { animeId, userId, nextStatus: newStatus, payload: params });
 
       const now = new Date().toISOString();
       const updateData: any = {

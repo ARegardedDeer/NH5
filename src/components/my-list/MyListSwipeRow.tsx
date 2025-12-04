@@ -2,6 +2,7 @@ import React, { useMemo, useRef, useState } from 'react';
 import { View, Text, StyleSheet, LayoutChangeEvent, I18nManager } from 'react-native';
 import { Swipeable } from 'react-native-gesture-handler';
 import HapticFeedback from 'react-native-haptic-feedback';
+import { UserListStatus } from '../../constants/userListStatus';
 
 type Direction = 'left' | 'right'; // Swipeable open direction
 type SwipeDir = 'leftward' | 'rightward'; // physical gesture
