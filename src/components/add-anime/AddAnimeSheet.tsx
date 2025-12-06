@@ -1,14 +1,23 @@
 import React, { useRef, useState, useCallback, useEffect } from 'react';
-import { View, Text, TextInput, StyleSheet, Pressable } from 'react-native';
+import { View, Text, TextInput, StyleSheet, Pressable, FlatList } from 'react-native';
 import BottomSheet, { BottomSheetBackdrop, BottomSheetView } from '@gorhom/bottom-sheet';
 import type { BottomSheetBackdropProps } from '@gorhom/bottom-sheet';
+import { useNavigation } from '@react-navigation/native';
 import { supabase, whenAuthed } from '../../db/supabaseClient';
 import { useAnimeSearch } from '../../hooks/useAnimeSearch';
 import { useAddToList } from '../../hooks/useAddToList';
+import { useRemoveFromList } from '../../hooks/useRemoveFromList';
 import { useInvalidateSearchCache } from '../../hooks/useInvalidateSearchCache';
-import { SearchDropdown } from './SearchDropdown';
-import { AnimeActionModal } from './AnimeActionModal';
+import { useToast } from '../../hooks/useToast';
+import { InlineSuggestion } from './InlineSuggestion';
+import { SearchResultRow } from './SearchResultRow';
+import { AnimeDetailDrawer } from './AnimeDetailDrawer';
+import { Toast } from '../shared/Toast';
 import HapticFeedback from 'react-native-haptic-feedback';
+import { AppNavigationProp } from '../../types/navigation';
+import type { AnimeSearchResult } from '../../hooks/useAnimeSearch';
+
+type SearchMode = 'suggestions' | 'full-results';
 
 interface AddAnimeSheetProps {
   isOpen: boolean;
@@ -17,11 +26,13 @@ interface AddAnimeSheetProps {
 
 export const AddAnimeSheet = React.forwardRef<BottomSheet, AddAnimeSheetProps>(
   ({ isOpen, onClose }, ref) => {
+    const navigation = useNavigation<AppNavigationProp>();
     const [userId, setUserId] = useState<string | null>(null);
     const [searchQuery, setSearchQuery] = useState('');
-    const [selectedAnime, setSelectedAnime] = useState<any>(null);
-    const [showActionModal, setShowActionModal] = useState(false);
+    const [searchMode, setSearchMode] = useState<SearchMode>('suggestions');
+    const [selectedAnime, setSelectedAnime] = useState<AnimeSearchResult | null>(null);
     const inputRef = useRef<TextInput>(null);
+    const detailDrawerRef = useRef<BottomSheet>(null);
 
     // Get user ID
     useEffect(() => {
@@ -36,18 +47,21 @@ export const AddAnimeSheet = React.forwardRef<BottomSheet, AddAnimeSheetProps>(
     });
 
     const addToListMutation = useAddToList();
+    const removeFromListMutation = useRemoveFromList();
     const invalidateSearchCache = useInvalidateSearchCache();
+    const { visible, message, type, onUndo, undoLabel, showToast, hideToast } = useToast();
 
-    const handleSelectResult = useCallback((anime: any) => {
-      setSelectedAnime(anime);
-      setShowActionModal(true);
-    }, []);
+    // Show 4 suggestions or all results based on mode
+    const displayResults = searchMode === 'suggestions'
+      ? searchResults?.slice(0, 4)
+      : searchResults;
 
     const handleSheetChange = useCallback((index: number) => {
       if (index === -1) {
         // Sheet closed
         onClose();
         setSearchQuery('');
+        setSearchMode('suggestions');
       } else if (index >= 0) {
         // Sheet opened - focus input
         setTimeout(() => {
@@ -56,32 +70,106 @@ export const AddAnimeSheet = React.forwardRef<BottomSheet, AddAnimeSheetProps>(
       }
     }, [onClose]);
 
-    const handleAddToList = useCallback(
-      (status: 'Plan to Watch' | 'Watching') => {
-        if (!userId || !selectedAnime) return;
+    const handleSubmitSearch = useCallback(() => {
+      // User pressed "Go" on keyboard - show full results
+      if (searchQuery.length >= 2) {
+        setSearchMode('full-results');
+        inputRef.current?.blur(); // Hide keyboard
+        // Snap points will update automatically to 95%
+      }
+    }, [searchQuery]);
 
-        addToListMutation.mutate(
-          {
-            userId,
-            animeId: selectedAnime.id,
-            status,
-            episodesCount: selectedAnime.episodes_count,
-          },
-          {
-            onSuccess: () => {
-              const action = status === 'Watching' ? 'Started watching' : 'Added to backlog';
-              console.log(`✅ ${action}: ${selectedAnime.title}`);
-              // Close modal after successful add
-              setShowActionModal(false);
-              setSelectedAnime(null);
-              // Clear search
-              setSearchQuery('');
-              // TODO: Show success toast
+  const handleSuggestionPress = useCallback((anime: AnimeSearchResult) => {
+    // User tapped a suggestion - close search drawer first
+    const searchSheet = (ref as any)?.current;
+    if (searchSheet) {
+      searchSheet.close();
+    }
+
+    setSelectedAnime(anime);
+
+    // Wait for search drawer to close, then open detail drawer to 90%
+    setTimeout(() => {
+      const detailSheet = detailDrawerRef.current;
+      console.log('[AddAnimeSheet] Opening detail drawer, ref exists:', !!detailSheet);
+      if (detailSheet) {
+        console.log('[AddAnimeSheet] Calling snapToIndex(0) for 90% height');
+        detailSheet.snapToIndex(0); // Open to index 0 = 90%
+      }
+    }, 300);
+  }, [ref]);
+
+  const handleResultPress = useCallback((anime: AnimeSearchResult) => {
+    // User tapped a result row - close search drawer first
+    const searchSheet = (ref as any)?.current;
+    if (searchSheet) {
+      searchSheet.close();
+    }
+
+    setSelectedAnime(anime);
+
+    // Wait for search drawer to close, then open detail drawer to 90%
+    setTimeout(() => {
+      const detailSheet = detailDrawerRef.current;
+      if (detailSheet) {
+        detailSheet.snapToIndex(0); // Open to index 0 = 90%
+      }
+    }, 300);
+  }, [ref]);
+
+    const handleCloseDetailDrawer = useCallback(() => {
+      detailDrawerRef.current?.close();
+      setSelectedAnime(null);
+    }, []);
+
+    const handleBackToSuggestions = useCallback(() => {
+      setSearchMode('suggestions');
+      inputRef.current?.focus();
+    }, []);
+
+    const handleAddToList = useCallback(
+      async (anime: AnimeSearchResult) => {
+        if (!userId) return;
+
+        return new Promise<void>((resolve, reject) => {
+          addToListMutation.mutate(
+            {
+              userId,
+              animeId: anime.id,
+              status: 'Plan to Watch', // Default to Plan to Watch
+              episodesCount: anime.episodes_count,
             },
-          }
-        );
+            {
+              onSuccess: () => {
+                // Show toast with undo
+                showToast({
+                  message: `Added "${anime.title}"`,
+                  type: 'success',
+                  duration: 5000, // 5 seconds for undo
+                  onUndo: () => {
+                    // Undo: Remove from list
+                    removeFromListMutation.mutate({
+                      userId,
+                      animeId: anime.id,
+                    });
+                  },
+                  undoLabel: 'Undo',
+                });
+                resolve();
+              },
+              onError: (error) => {
+                showToast({
+                  message: 'Failed to add. Try again.',
+                  type: 'error',
+                });
+                console.error('[AddAnimeSheet] Error:', error);
+                reject(error);
+              },
+            }
+          );
+        });
       },
-      [userId, selectedAnime, addToListMutation]
+      [userId, addToListMutation, removeFromListMutation, showToast]
     );
 
     const renderBackdrop = useCallback(
@@ -100,114 +188,217 @@ export const AddAnimeSheet = React.forwardRef<BottomSheet, AddAnimeSheetProps>(
       [onClose]
     );
 
+  const renderContent = () => {
+      // Empty state (no search yet)
+      if (searchQuery.length < 2) {
+        return (
+          <View style={styles.emptyState}>
+            <Text style={styles.emptyIcon}>🔍</Text>
+            <Text style={styles.emptyTitle}>Search for anime</Text>
+            <Text style={styles.emptySubtitle}>
+              Type at least 2 characters
+            </Text>
+          </View>
+        );
+      }
+
+      // Loading state
+      if (isLoading) {
+        return (
+          <View style={styles.emptyState}>
+            <Text style={styles.emptySubtitle}>Searching...</Text>
+          </View>
+        );
+      }
+
+      // No results
+      if (!searchResults || searchResults.length === 0) {
+        return (
+          <View style={styles.emptyState}>
+            <Text style={styles.emptyIcon}>😕</Text>
+            <Text style={styles.emptyTitle}>No results</Text>
+            <Text style={styles.emptySubtitle}>
+              Try a different search term
+            </Text>
+          </View>
+        );
+      }
+
+      // Suggestion mode - inline suggestions
+      if (searchMode === 'suggestions') {
+        return (
+          <View style={styles.suggestionsContainer}>
+            {displayResults?.map((anime) => (
+              <InlineSuggestion
+                key={anime.id}
+                title={anime.title}
+                query={searchQuery}
+                onPress={() => handleSuggestionPress(anime)}
+              />
+            ))}
+
+            {/* Show "See all X results" if more than 4 */}
+            {searchResults.length > 4 && (
+              <Pressable
+                style={styles.seeAllButton}
+                onPress={() => {
+                  HapticFeedback.trigger('impactLight');
+                  setSearchMode('full-results');
+                  // Snap points will update automatically to 95%
+                }}
+              >
+                <Text style={styles.seeAllText}>
+                  See all {searchResults.length} results →
+                </Text>
+              </Pressable>
+            )}
+          </View>
+        );
+      }
+
+      // Full results mode - scrollable list with details
+      return (
+        <FlatList
+          data={displayResults}
+          keyExtractor={(item) => item.id}
+          renderItem={({ item }) => (
+            <SearchResultRow
+              anime={item}
+              onPress={() => handleResultPress(item)}
+              onQuickAdd={() => handleAddToList(item)}
+            />
+          )}
+          contentContainerStyle={styles.resultsList}
+          showsVerticalScrollIndicator={false}
+        />
+      );
+    };
+
     return (
       <>
         <BottomSheet
           ref={ref}
           index={-1}
-          snapPoints={['50%']}
+          snapPoints={searchMode === 'suggestions' ? ['90%'] : ['95%']}
           enablePanDownToClose
           onChange={handleSheetChange}
           backdropComponent={renderBackdrop}
           backgroundStyle={styles.background}
           handleIndicatorStyle={styles.indicator}
         >
-          <BottomSheetView style={styles.content}>
-            {/* Header */}
-            <View style={styles.header}>
-              <Text style={styles.title}>Add Anime</Text>
-              <View style={styles.headerActions}>
-                {/* Debug: Clear cache button (remove in production) */}
-                <Pressable
-                  onPress={() => {
-                    HapticFeedback.trigger('impactMedium');
-                    invalidateSearchCache();
-                    console.log('[AddAnimeSheet] 🗑️ Cache cleared manually');
-                  }}
-                  style={styles.debugButton}
-                >
-                  <Text style={styles.debugButtonText}>🗑️</Text>
-                </Pressable>
-                <Pressable
-                  onPress={() => {
-                    HapticFeedback.trigger('impactLight');
-                    onClose();
-                  }}
-                  style={styles.closeButton}
-                >
-                  <Text style={styles.closeButtonText}>✕</Text>
-                </Pressable>
-              </View>
-            </View>
-
-            {/* Search Input Container (relative positioning for dropdown) */}
-            <View style={styles.searchWrapper}>
-              <View style={styles.searchContainer}>
-                <Text style={styles.searchIcon}>🔍</Text>
-                <TextInput
-                  ref={inputRef}
-                  style={styles.searchInput}
-                  placeholder="Search anime..."
-                  placeholderTextColor="#86868B"
-                  value={searchQuery}
-                  onChangeText={setSearchQuery}
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  returnKeyType="search"
-                />
-                {searchQuery.length > 0 && (
-                  <Pressable
-                    onPress={() => setSearchQuery('')}
-                    style={styles.clearButton}
-                  >
-                    <Text style={styles.clearButtonText}>✕</Text>
-                  </Pressable>
-                )}
-              </View>
-
-              {/* Dropdown appears below search bar */}
-              {searchQuery.length >= 2 && (
-                <SearchDropdown
-                  results={searchResults || []}
-                  isLoading={isLoading}
-                  onSelectResult={handleSelectResult}
-                  searchQuery={searchQuery}
-                  maxResults={8}
-                />
-              )}
-            </View>
-
-            {/* Empty state when no search query */}
-            {searchQuery.length < 2 && (
-              <View style={styles.emptyState}>
-                <Text style={styles.emptyIcon}>🔍</Text>
-                <Text style={styles.emptyTitle}>Search for anime</Text>
-                <Text style={styles.emptySubtitle}>
-                  Type at least 2 characters to see suggestions
-                </Text>
-              </View>
+        <BottomSheetView style={styles.content}>
+          {/* Header */}
+          <View style={styles.header}>
+            {searchMode === 'full-results' && (
+              <Pressable
+                onPress={handleBackToSuggestions}
+                style={styles.backButton}
+              >
+                <Text style={styles.backButtonText}>←</Text>
+              </Pressable>
             )}
-          </BottomSheetView>
-        </BottomSheet>
 
-        {/* Action modal */}
-        <AnimeActionModal
-          visible={showActionModal}
-          anime={selectedAnime}
-          onClose={() => {
-            setShowActionModal(false);
-            setSelectedAnime(null);
-          }}
-          onSave={() => handleAddToList('Plan to Watch')}
-          onStart={() => handleAddToList('Watching')}
-          isAdding={addToListMutation.isPending}
-        />
-      </>
+            <Text style={styles.title}>
+              {searchMode === 'suggestions' ? 'Add Anime' : 'Search Results'}
+            </Text>
+
+            <View style={styles.headerActions}>
+              {/* Debug: Clear cache button (remove in production) */}
+              <Pressable
+                onPress={() => {
+                  HapticFeedback.trigger('impactMedium');
+                  invalidateSearchCache();
+                  console.log('[AddAnimeSheet] 🗑️ Cache cleared manually');
+                }}
+                style={styles.debugButton}
+              >
+                <Text style={styles.debugButtonText}>🗑️</Text>
+              </Pressable>
+              <Pressable
+                onPress={() => {
+                  HapticFeedback.trigger('impactLight');
+                  onClose();
+                }}
+                style={styles.closeButton}
+              >
+                <Text style={styles.closeButtonText}>✕</Text>
+              </Pressable>
+            </View>
+          </View>
+
+          {/* Search Input */}
+          <View
+            style={[
+              styles.searchContainer,
+              searchMode === 'suggestions' &&
+                displayResults &&
+                displayResults.length > 0 &&
+                styles.searchContainerWithSuggestions,
+            ]}
+          >
+            <Text style={styles.searchIcon}>🔍</Text>
+            <TextInput
+              ref={inputRef}
+              style={styles.searchInput}
+              placeholder="Search anime..."
+              placeholderTextColor="#86868B"
+              value={searchQuery}
+              onChangeText={(text) => {
+                setSearchQuery(text);
+                if (searchMode === 'full-results' && text.length < 2) {
+                  setSearchMode('suggestions');
+                }
+              }}
+              onSubmitEditing={handleSubmitSearch}
+              autoCapitalize="none"
+              autoCorrect={false}
+              returnKeyType="search"
+            />
+            {searchQuery.length > 0 && (
+              <Pressable
+                onPress={() => {
+                  setSearchQuery('');
+                  setSearchMode('suggestions');
+                }}
+                style={styles.clearButton}
+              >
+                <Text style={styles.clearButtonText}>✕</Text>
+              </Pressable>
+            )}
+          </View>
+
+          {/* Results */}
+          {renderContent()}
+        </BottomSheetView>
+      </BottomSheet>
+
+      {/* Detail Drawer */}
+      <AnimeDetailDrawer
+        ref={detailDrawerRef}
+        anime={selectedAnime}
+        isOpen={!!selectedAnime}
+        onClose={handleCloseDetailDrawer}
+        onAddToBacklog={() => selectedAnime && handleAddToList(selectedAnime)}
+      />
+
+      {/* Toast - Moved outside BottomSheet */}
+      <Toast
+        visible={visible}
+        message={message}
+        type={type}
+        onDismiss={hideToast}
+        onUndo={onUndo}
+        undoLabel={undoLabel}
+      />
+    </>
     );
   }
 );
 
 const styles = StyleSheet.create({
+  wrapper: {
+    flex: 1,
+  },
   background: {
     backgroundColor: '#1A1A2E',
   },
@@ -258,9 +449,15 @@ const styles = StyleSheet.create({
     fontSize: 18,
     color: '#86868B',
   },
-  searchWrapper: {
-    position: 'relative',
-    marginBottom: 20,
+  backButton: {
+    width: 32,
+    height: 32,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  backButtonText: {
+    fontSize: 24,
+    color: '#FFFFFF',
   },
   searchContainer: {
     flexDirection: 'row',
@@ -269,6 +466,12 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     paddingHorizontal: 16,
     paddingVertical: 12,
+    marginBottom: 20,
+  },
+  searchContainerWithSuggestions: {
+    borderBottomLeftRadius: 0,
+    borderBottomRightRadius: 0,
+    marginBottom: 0,
   },
   searchIcon: {
     fontSize: 18,
@@ -309,5 +512,26 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: '#86868B',
     textAlign: 'center',
+  },
+  suggestionsContainer: {
+    backgroundColor: '#1A1A2E',
+  },
+  seeAllButton: {
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    backgroundColor: '#2A2A3E',
+    borderBottomLeftRadius: 12,
+    borderBottomRightRadius: 12,
+    marginBottom: 20,
+  },
+  seeAllText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#7C3AED',
+    textAlign: 'center',
+  },
+  resultsList: {
+    paddingBottom: 40,
+    paddingTop: 20,
   },
 });

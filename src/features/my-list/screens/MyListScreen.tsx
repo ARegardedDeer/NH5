@@ -205,7 +205,8 @@ export const MyListScreen = () => {
 
   const handleOpenAddSheet = () => {
     setIsAddSheetOpen(true);
-    addSheetRef.current?.expand();
+    // Open to index 0 (90% - only snap point in suggestions mode)
+    addSheetRef.current?.snapToIndex(0);
   };
 
   const handleCloseAddSheet = () => {
