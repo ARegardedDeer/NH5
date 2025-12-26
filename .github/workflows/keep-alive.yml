@@ -1,0 +1,17 @@
+name: Keep Supabase Database Active
+
+on:
+  schedule:
+    # Run every 3 days at 2am UTC
+    - cron: '0 2 */3 * *'
+  workflow_dispatch: # Allow manual trigger
+
+jobs:
+  keep-alive:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Database
+        run: |
+          curl -X POST '${{ secrets.SUPABASE_URL }}/rest/v1/rpc/keep_alive' \
+            -H "apikey: ${{ secrets.SUPABASE_ANON_KEY }}" \
+            -H "Content-Type: application/json"
