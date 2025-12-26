@@ -33,6 +33,7 @@ export const Toast: React.FC<ToastProps> = ({
 
   useEffect(() => {
     if (visible) {
+      console.log('[Toast] 🎉 Showing toast:', message);
       // Slide up
       translateY.value = withSpring(-20, { damping: 15 });
       opacity.value = withSpring(1);

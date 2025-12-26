@@ -8,11 +8,10 @@ import { useAnimeSearch } from '../../hooks/useAnimeSearch';
 import { useAddToList } from '../../hooks/useAddToList';
 import { useRemoveFromList } from '../../hooks/useRemoveFromList';
 import { useInvalidateSearchCache } from '../../hooks/useInvalidateSearchCache';
-import { useToast } from '../../hooks/useToast';
+import { useToast } from '../../ui/toast/ToastHost';
 import { InlineSuggestion } from './InlineSuggestion';
 import { SearchResultRow } from './SearchResultRow';
 import { AnimeDetailDrawer } from './AnimeDetailDrawer';
-import { Toast } from '../shared/Toast';
 import HapticFeedback from 'react-native-haptic-feedback';
 import { AppNavigationProp } from '../../types/navigation';
 import type { AnimeSearchResult } from '../../hooks/useAnimeSearch';
@@ -49,7 +48,7 @@ export const AddAnimeSheet = React.forwardRef<BottomSheet, AddAnimeSheetProps>(
     const addToListMutation = useAddToList();
     const removeFromListMutation = useRemoveFromList();
     const invalidateSearchCache = useInvalidateSearchCache();
-    const { visible, message, type, onUndo, undoLabel, showToast, hideToast } = useToast();
+    const toast = useToast();
 
     // Show 4 suggestions or all results based on mode
     const displayResults = searchMode === 'suggestions'
@@ -141,27 +140,12 @@ export const AddAnimeSheet = React.forwardRef<BottomSheet, AddAnimeSheetProps>(
             },
             {
               onSuccess: () => {
-                // Show toast with undo
-                showToast({
-                  message: `Added "${anime.title}"`,
-                  type: 'success',
-                  duration: 5000, // 5 seconds for undo
-                  onUndo: () => {
-                    // Undo: Remove from list
-                    removeFromListMutation.mutate({
-                      userId,
-                      animeId: anime.id,
-                    });
-                  },
-                  undoLabel: 'Undo',
-                });
+                console.log('[AddAnimeSheet] ✅ Add successful, showing toast for:', anime.title);
+                toast.show(`Added "${anime.title}"`, 3000);
                 resolve();
               },
               onError: (error) => {
-                showToast({
-                  message: 'Failed to add. Try again.',
-                  type: 'error',
-                });
+                toast.show('Failed to add. Try again.', 3000);
                 console.error('[AddAnimeSheet] Error:', error);
                 reject(error);
               },
@@ -384,18 +368,6 @@ export const AddAnimeSheet = React.forwardRef<BottomSheet, AddAnimeSheetProps>(
           }
         }}
       />
-
-      {/* Toast - Moved outside BottomSheet with high z-index */}
-      <View style={{ zIndex: 99999, elevation: 99999 }} pointerEvents="box-none">
-        <Toast
-          visible={visible}
-          message={message}
-          type={type}
-          onDismiss={hideToast}
-          onUndo={onUndo}
-          undoLabel={undoLabel}
-        />
-      </View>
     </>
     );
   }
