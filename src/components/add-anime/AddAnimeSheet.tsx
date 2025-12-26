@@ -378,18 +378,24 @@ export const AddAnimeSheet = React.forwardRef<BottomSheet, AddAnimeSheetProps>(
         anime={selectedAnime}
         isOpen={!!selectedAnime}
         onClose={handleCloseDetailDrawer}
-        onAddToBacklog={() => selectedAnime && handleAddToList(selectedAnime)}
+        onAddToBacklog={() => {
+          if (selectedAnime) {
+            handleAddToList(selectedAnime);
+          }
+        }}
       />
 
-      {/* Toast - Moved outside BottomSheet */}
-      <Toast
-        visible={visible}
-        message={message}
-        type={type}
-        onDismiss={hideToast}
-        onUndo={onUndo}
-        undoLabel={undoLabel}
-      />
+      {/* Toast - Moved outside BottomSheet with high z-index */}
+      <View style={{ zIndex: 99999, elevation: 99999 }} pointerEvents="box-none">
+        <Toast
+          visible={visible}
+          message={message}
+          type={type}
+          onDismiss={hideToast}
+          onUndo={onUndo}
+          undoLabel={undoLabel}
+        />
+      </View>
     </>
     );
   }

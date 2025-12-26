@@ -7,7 +7,7 @@ interface UseAnimeSearchOptions {
   debounceMs?: number;
 }
 
-interface AnimeSearchResult {
+export interface AnimeSearchResult {
   id: string;
   title: string;
   thumbnail_url: string | null;
@@ -57,7 +57,6 @@ export const useAnimeSearch = (
         console.error('[useAnimeSearch] Error message:', error.message);
         console.error('[useAnimeSearch] Error details:', error.details);
         console.error('[useAnimeSearch] Error hint:', error.hint);
-        console.error('[useAnimeSearch] Full error object:', JSON.stringify(error, null, 2));
         throw error;
       }
 

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, Image, StyleSheet, Pressable } from 'react-native';
 import BottomSheet, { BottomSheetScrollView } from '@gorhom/bottom-sheet';
 import Animated from 'react-native-reanimated';
@@ -19,6 +19,7 @@ interface AnimeDetailDrawerProps {
   isOpen: boolean;
   onClose: () => void;
   onAddToBacklog: () => void;
+  isAdded?: boolean; // Track if anime is already added
 }
 
 // Process genres to ensure they're separated
@@ -39,10 +40,16 @@ const processGenres = (genres: string[] | null): string[] => {
 };
 
 export const AnimeDetailDrawer = React.forwardRef<BottomSheet, AnimeDetailDrawerProps>(
-  ({ anime, isOpen, onClose, onAddToBacklog }, ref) => {
+  ({ anime, isOpen, onClose, onAddToBacklog, isAdded = false }, ref) => {
     const navigation = useNavigation<AppNavigationProp>();
     const detailsAnim = useButtonPress();
     const addAnim = useButtonPress();
+    const [localIsAdded, setLocalIsAdded] = useState(isAdded);
+
+    // Reset state when drawer opens with new anime
+    useEffect(() => {
+      setLocalIsAdded(isAdded);
+    }, [anime?.id, isAdded]);
 
     if (!anime) return null;
 
@@ -57,6 +64,7 @@ export const AnimeDetailDrawer = React.forwardRef<BottomSheet, AnimeDetailDrawer
 
     const handleAddToBacklog = () => {
       HapticFeedback.trigger('impactLight');
+      setLocalIsAdded(true); // Set local state immediately for instant feedback
       onAddToBacklog();
     };
 
@@ -141,12 +149,18 @@ export const AnimeDetailDrawer = React.forwardRef<BottomSheet, AnimeDetailDrawer
             {/* Add to Backlog (Right) */}
             <Animated.View style={[styles.ctaButton, addAnim.animatedStyle]}>
               <Pressable
-                style={[styles.button, styles.addButton]}
+                style={[
+                  styles.button,
+                  localIsAdded ? styles.addedButton : styles.addButton
+                ]}
                 onPress={handleAddToBacklog}
-                onPressIn={addAnim.onPressIn}
-                onPressOut={addAnim.onPressOut}
+                onPressIn={!localIsAdded ? addAnim.onPressIn : undefined}
+                onPressOut={!localIsAdded ? addAnim.onPressOut : undefined}
+                disabled={localIsAdded}
               >
-                <Text style={styles.addButtonText}>Add to Backlog</Text>
+                <Text style={localIsAdded ? styles.addedButtonText : styles.addButtonText}>
+                  {localIsAdded ? '✓ Added!' : 'Add to Backlog'}
+                </Text>
               </Pressable>
             </Animated.View>
           </View>
@@ -292,6 +306,16 @@ const styles = StyleSheet.create({
   },
 
   addButtonText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#FFFFFF',
+  },
+
+  addedButton: {
+    backgroundColor: '#4CAF50', // Green background
+  },
+
+  addedButtonText: {
     fontSize: 15,
     fontWeight: '600',
     color: '#FFFFFF',
