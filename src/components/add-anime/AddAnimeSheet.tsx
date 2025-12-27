@@ -153,7 +153,7 @@ export const AddAnimeSheet = React.forwardRef<BottomSheet, AddAnimeSheetProps>(
           );
         });
       },
-      [userId, addToListMutation, removeFromListMutation, showToast]
+      [userId, addToListMutation, removeFromListMutation, toast]
     );
 
     const renderBackdrop = useCallback(
