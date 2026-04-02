@@ -15,3 +15,10 @@ src/dev/devAuth.ts
 
 # MCP configuration with database credentials
 .mcp.json
+
+# iOS Build Artifacts (generated, not source)
+ios/Pods/
+ios/Podfile.lock
+ios/*.xcworkspace/xcuserdata/
+ios/*.xcodeproj/xcuserdata/
+*.xcscheme
