@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, FlatList, Pressable, StyleSheet, ActivityIndicator } from 'react-native';
+import { View, Text, FlatList, Pressable, StyleSheet } from 'react-native';
 import { useContinueWatching } from '../../hooks/useContinueWatching';
 import { ContinueWatchingCard } from './ContinueWatchingCard';
 import { ContinueWatchingCardV2 } from './ContinueWatchingCardV2';
@@ -38,9 +38,13 @@ export const ContinueWatchingSection: React.FC<ContinueWatchingSectionProps> = (
   if (isLoading) {
     return (
       <View style={styles.container}>
-        <Text style={styles.sectionTitle}>Continue Watching</Text>
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#7C3AED" />
+        <View style={styles.header}>
+          <Text style={styles.sectionTitle}>Continue Watching</Text>
+        </View>
+        <View style={styles.skeletonRow}>
+          <View style={styles.skeletonCard} />
+          <View style={styles.skeletonCard} />
+          <View style={styles.skeletonCard} />
         </View>
       </View>
     );
@@ -64,7 +68,12 @@ export const ContinueWatchingSection: React.FC<ContinueWatchingSectionProps> = (
       <View style={styles.header}>
         <Text style={styles.sectionTitle}>Continue Watching</Text>
         {showSeeAll && (
-          <Pressable onPress={onSeeAll}>
+          <Pressable
+            onPress={onSeeAll}
+            style={{ paddingVertical: 12, paddingHorizontal: 4 }}
+            accessibilityLabel="See all currently watching"
+            accessibilityRole="button"
+          >
             <Text style={styles.seeAllText}>See All</Text>
           </Pressable>
         )}
@@ -132,7 +141,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 20,
     fontWeight: '700',
-    color: '#1D1D1F',
+    color: '#FFFFFF',
     letterSpacing: -0.4,
   },
 
@@ -143,10 +152,17 @@ const styles = StyleSheet.create({
     letterSpacing: -0.2,
   },
 
-  loadingContainer: {
-    height: 280,
-    alignItems: 'center',
-    justifyContent: 'center',
+  skeletonRow: {
+    flexDirection: 'row',
+    paddingHorizontal: 20,
+    gap: 12,
+  },
+
+  skeletonCard: {
+    width: 140,
+    height: 200,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255,255,255,0.06)',
   },
 
   listContent: {

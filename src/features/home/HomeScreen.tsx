@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, ScrollView, FlatList } from 'react-native';
+import { View, Text, ScrollView, FlatList, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { rails, featuredLists } from './mockData';
 import { CollectionCard } from './components/CollectionCard';
@@ -25,10 +25,24 @@ export default function HomeScreen() {
     <SafeAreaView style={{ flex:1, backgroundColor: theme.colors.bgDark }} edges={['top', 'left', 'right']}>
       {/* Sticky header */}
       <View style={{ paddingHorizontal:20, paddingTop:8, paddingBottom:8, flexDirection:'row', alignItems:'center', justifyContent:'space-between' }}>
-        <Text style={{ color: theme.colors.text, fontWeight:'800', fontSize:20 }}>Nimehime</Text>
-        <View style={{ flexDirection:'row', gap:12 }}>
-          <MaterialIcon name="search" size={22} color={theme.colors.text} />
-          <MaterialIcon name="person" size={22} color={theme.colors.text} />
+        <Text style={{ color: theme.colors.text, fontWeight:'700', fontSize:20 }}>Nimehime</Text>
+        <View style={{ flexDirection:'row', gap:4 }}>
+          <Pressable
+            onPress={() => console.log('TODO: navigate to Search')}
+            style={{ padding: 11 }}
+            accessibilityLabel="Search"
+            accessibilityRole="button"
+          >
+            <MaterialIcon name="search" size={22} color={theme.colors.text} />
+          </Pressable>
+          <Pressable
+            onPress={() => console.log('TODO: navigate to Profile')}
+            style={{ padding: 11 }}
+            accessibilityLabel="Profile"
+            accessibilityRole="button"
+          >
+            <MaterialIcon name="person" size={22} color={theme.colors.text} />
+          </Pressable>
         </View>
       </View>
 
@@ -41,7 +55,7 @@ export default function HomeScreen() {
         )}
 
         <View style={{ paddingHorizontal:20, paddingTop:6, paddingBottom:8 }}>
-          <Text style={{ color: theme.colors.text, fontWeight:'800', fontSize:22 }}>✨ Smart Collections</Text>
+          <Text style={{ color: theme.colors.text, fontWeight:'700', fontSize:22 }}>✨ Smart Collections</Text>
         </View>
 
         <View style={{ paddingHorizontal:20, gap:12 }}>
@@ -57,7 +71,7 @@ export default function HomeScreen() {
         </View>
 
         <View style={{ paddingHorizontal:20, paddingTop:20 }}>
-          <Text style={{ color: theme.colors.text, fontWeight:'800', fontSize:22 }}>✨ Featured Lists</Text>
+          <Text style={{ color: theme.colors.text, fontWeight:'700', fontSize:22 }}>✨ Featured Lists</Text>
         </View>
 
         <FlatList

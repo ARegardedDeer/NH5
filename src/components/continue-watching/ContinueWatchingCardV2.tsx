@@ -84,6 +84,8 @@ export const ContinueWatchingCardV2: React.FC<ContinueWatchingCardV2Props> = ({
       ]}
       onPress={handlePress}
       disabled={isSingleEpisode && isCompleted}
+      accessibilityLabel={`${displayTitle}, episode ${currentEpisode}`}
+      accessibilityRole="button"
     >
       {/* Poster */}
       <Image
@@ -101,6 +103,9 @@ export const ContinueWatchingCardV2: React.FC<ContinueWatchingCardV2Props> = ({
       <Pressable
         style={styles.infoButton}
         onPress={handleInfoPress}
+        hitSlop={{ top: 9, bottom: 9, left: 9, right: 9 }}
+        accessibilityLabel={`More info about ${displayTitle}`}
+        accessibilityRole="button"
       >
         <Text style={styles.infoIcon}>ⓘ</Text>
       </Pressable>

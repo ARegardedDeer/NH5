@@ -8,7 +8,7 @@ import { useAnimeSearch } from '../../hooks/useAnimeSearch';
 import { useAddToList } from '../../hooks/useAddToList';
 import { useRemoveFromList } from '../../hooks/useRemoveFromList';
 import { useInvalidateSearchCache } from '../../hooks/useInvalidateSearchCache';
-import { useToast } from '../../ui/toast/ToastHost';
+import { useToast } from '../../contexts/ToastContext';
 import { InlineSuggestion } from './InlineSuggestion';
 import { SearchResultRow } from './SearchResultRow';
 import { AnimeDetailDrawer } from './AnimeDetailDrawer';
@@ -48,7 +48,7 @@ export const AddAnimeSheet = React.forwardRef<BottomSheet, AddAnimeSheetProps>(
     const addToListMutation = useAddToList();
     const removeFromListMutation = useRemoveFromList();
     const invalidateSearchCache = useInvalidateSearchCache();
-    const toast = useToast();
+    const { showToast } = useToast();
 
     // Show 4 suggestions or all results based on mode
     const displayResults = searchMode === 'suggestions'
@@ -141,11 +141,26 @@ export const AddAnimeSheet = React.forwardRef<BottomSheet, AddAnimeSheetProps>(
             {
               onSuccess: () => {
                 console.log('[AddAnimeSheet] ✅ Add successful, showing toast for:', anime.title);
-                toast.show(`Added "${anime.title}"`, 3000);
+                showToast({
+                  message: `Added "${anime.title}"`,
+                  type: 'success',
+                  duration: 5000,
+                  onUndo: () => {
+                    console.log('[AddAnimeSheet] 🔄 Undo add:', anime.title);
+                    removeFromListMutation.mutate({
+                      userId,
+                      animeId: anime.id,
+                    });
+                  },
+                });
                 resolve();
               },
               onError: (error) => {
-                toast.show('Failed to add. Try again.', 3000);
+                showToast({
+                  message: 'Failed to add. Try again.',
+                  type: 'error',
+                  duration: 3000,
+                });
                 console.error('[AddAnimeSheet] Error:', error);
                 reject(error);
               },
@@ -153,7 +168,7 @@ export const AddAnimeSheet = React.forwardRef<BottomSheet, AddAnimeSheetProps>(
           );
         });
       },
-      [userId, addToListMutation, removeFromListMutation, toast]
+      [userId, addToListMutation, removeFromListMutation, showToast]
     );
 
     const renderBackdrop = useCallback(

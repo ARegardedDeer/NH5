@@ -24,7 +24,7 @@ import { supabase, whenAuthed } from '../../../db/supabaseClient';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { RatingBadge, RatingSheet } from '../../../components/rating';
 import { readUserRating, upsertUserRating, deleteUserRating, setElevenFlag, normalizeScore } from '../../rating/persistence';
-import { useToast } from '../../../ui/toast/ToastHost';
+import { useToast } from '../../../contexts/ToastContext';
 
 const DEV = __DEV__;
 const DEV_VERBOSE = __DEV__ && false; // flip to true for deep debugging
@@ -70,7 +70,7 @@ export default function AnimeDetailScreen() {
   const id = animeId;
 
   const { data, isLoading, error } = useAnimeById(id);
-  const toast = useToast();
+  const { showToast } = useToast();
   const queryClient = useQueryClient();
 
   const [bookmarked, setBookmarked] = useState(false);
@@ -249,7 +249,7 @@ export default function AnimeDetailScreen() {
       if (error) {
         setMyRating(myRatingPrevRef.current ?? null);
         setSavingMyRating(false);
-        toast.show('Error saving 11/10');
+        showToast({ message: 'Error saving 11/10', type: 'error', duration: 3000 });
         if (DEV) console.warn('[ratings] eleven rpc error:', error.message);
         return;
       }
@@ -259,17 +259,17 @@ export default function AnimeDetailScreen() {
       if (!res.ok) {
         setMyRating(myRatingPrevRef.current ?? null);
         setSavingMyRating(false);
-        toast.show('Error saving rating');
+        showToast({ message: 'Error saving rating', type: 'error', duration: 3000 });
         if (DEV) console.warn('[ratings] commit: persisted=false error=', res.error);
         return;
       }
     }
 
     if (DEV) console.log('[ratings] commit: persisted=true score=', score);
-    toast.show(`Saved: ${score === 11 ? '11/10' : `${score}/10`}`);
+    showToast({ message: `Saved: ${score === 11 ? '11/10' : `${score}/10`}`, type: 'success', duration: 3000 });
     setSavingMyRating(false);
     setReloadKey(k => k + 1);
-  }, [authReady, id, myRating, toast]);
+  }, [authReady, id, myRating, showToast]);
 
   const clearMyRating = useCallback(async () => {
     if (!authReady || !id) return;
@@ -287,10 +287,10 @@ export default function AnimeDetailScreen() {
     setMyRating(null);
     setSavingMyRating(false);
     setRatingUIOpen(false);
-    toast.show('Rating cleared');
+    showToast({ message: 'Rating cleared', type: 'info', duration: 3000 });
     setReloadKey(k => k + 1);
     if (DEV) console.log('[ratings] clear=1');
-  }, [authReady, id, toast]);
+  }, [authReady, id, showToast]);
 
   const persistUserList = useCallback(
     async ({ userId, animeId, bookmarked: nextBookmarked, status: nextStatus }: PersistPayload) => {
@@ -416,16 +416,16 @@ export default function AnimeDetailScreen() {
       // Rollback optimistic UI on error
       setMyRating(myRatingPrevRef.current ?? null);
       setSavingMyRating(false);
-      toast.show('Error saving 11/10');
+      showToast({ message: 'Error saving 11/10', type: 'error', duration: 3000 });
       if (DEV) console.warn('[ratings] eleven rpc error:', error.message);
       return;
     }
 
     if (DEV) console.log('[ratings] eleven: persisted=true score=11');
-    toast.show('Saved: 11/10');
+    showToast({ message: 'Saved: 11/10', type: 'success', duration: 3000 });
     setSavingMyRating(false);
     setReloadKey(k => k + 1);
-  }, [authReady, id, myRating, toast]);
+  }, [authReady, id, myRating, showToast]);
 
   const onToggleBookmark = useCallback(async () => {
     const next = !bookmarked;

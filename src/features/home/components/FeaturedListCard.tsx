@@ -22,5 +22,5 @@ export function FeaturedListCard({ title, creator, avatar, images }: Props) {
 const s = StyleSheet.create({
   wrap:{ width: 288, borderRadius: 16, padding: 12, backgroundColor: 'rgba(91,19,236,0.2)', gap: 6 },
   tile:{ flex:1, borderRadius: 10, backgroundColor:'#222' },
-  title:{ color: theme.colors.text, fontWeight:'800', fontSize: 14, marginTop: 6 }
+  title:{ color: theme.colors.text, fontWeight:'700', fontSize: 14, marginTop: 6 }
 });

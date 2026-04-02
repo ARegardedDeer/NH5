@@ -33,7 +33,7 @@ const s = StyleSheet.create({
     borderColor: theme.colors.border,
     backgroundColor: 'rgba(255,255,255,0.06)'
   },
-  h3:{ color: theme.colors.text, fontSize: 18, fontWeight:'800' },
+  h3:{ color: theme.colors.text, fontSize: 18, fontWeight:'700' },
   sub:{ color: theme.colors.textMuted, fontSize: 12, marginTop: 4 },
   chip:{ backgroundColor: theme.colors.chip, paddingHorizontal:10, paddingVertical:6, borderRadius: 999 },
   chipText:{ color: theme.colors.text, fontSize: 11, fontWeight:'600' }

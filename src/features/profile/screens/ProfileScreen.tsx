@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { ScrollView, View, Text, RefreshControl, StyleSheet } from "react-native";
+import { ScrollView, View, Text, RefreshControl, StyleSheet, Pressable } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import { AppNavigationProp } from "../../../types/navigation";
 import { navigateToAnimeDetail } from "../../../utils/navigationHelpers";
@@ -9,6 +9,8 @@ import ProgressBar from "../../../ui/components/ProgressBar";
 import HeroBanner from "../components/HeroBanner";
 import GridNine from "../components/GridNine";
 import ProfileHeader from "../components/ProfileHeader";
+import { useToast } from "../../../contexts/ToastContext";
+import HapticFeedback from 'react-native-haptic-feedback';
 
 const C = {
   bg: "#0F0D1A",
@@ -22,6 +24,7 @@ export default function ProfileScreen() {
   const navigation = useNavigation<AppNavigationProp>();
   const { data, isLoading, refetch, error } = useProfileData();
   const [showOverlay, setShowOverlay] = useState(true);
+  const { showToast } = useToast();
 
   // Run the guard once on mount in dev
   useEffect(() => {
@@ -192,6 +195,80 @@ export default function ProfileScreen() {
           </View>
         </View>
 
+        {/* Debug Toast Tester (DEV only) */}
+        {__DEV__ && (
+          <View style={styles.section}>
+            <Text style={styles.h2}>🧪 Toast Debug</Text>
+            <View style={styles.toastDebugRow}>
+              <Pressable
+                style={[styles.toastButton, styles.toastButtonSuccess]}
+                onPress={() => {
+                  HapticFeedback.trigger('notificationSuccess');
+                  showToast({
+                    message: 'This is a success toast!',
+                    type: 'success',
+                    duration: 8000,
+                    onUndo: () => console.log('Undo clicked!'),
+                  });
+                }}
+              >
+                <Text style={styles.toastButtonText}>✓ Success</Text>
+              </Pressable>
+
+              <Pressable
+                style={[styles.toastButton, styles.toastButtonError]}
+                onPress={() => {
+                  HapticFeedback.trigger('notificationError');
+                  showToast({
+                    message: 'This is an error toast!',
+                    type: 'error',
+                    duration: 8000,
+                  });
+                }}
+              >
+                <Text style={styles.toastButtonText}>✕ Error</Text>
+              </Pressable>
+
+              <Pressable
+                style={[styles.toastButton, styles.toastButtonInfo]}
+                onPress={() => {
+                  HapticFeedback.trigger('impactLight');
+                  showToast({
+                    message: 'This is an info toast!',
+                    type: 'info',
+                    duration: 8000,
+                  });
+                }}
+              >
+                <Text style={styles.toastButtonText}>ℹ Info</Text>
+              </Pressable>
+            </View>
+
+            <Pressable
+              style={[styles.toastButton, styles.toastButtonUndo]}
+              onPress={() => {
+                HapticFeedback.trigger('impactMedium');
+                showToast({
+                  message: 'Added "Cowboy Bebop" to your list',
+                  type: 'success',
+                  duration: 7000,
+                  onUndo: () => {
+                    console.log('Undoing add...');
+                    showToast({
+                      message: 'Removed from list',
+                      type: 'info',
+                      duration: 3000,
+                    });
+                  },
+                  undoLabel: 'Undo',
+                });
+              }}
+            >
+              <Text style={styles.toastButtonText}>🔄 Test Undo</Text>
+            </Pressable>
+          </View>
+        )}
+
         {!!error && __DEV__ && (
           <View style={styles.errBox}>
             <Text style={styles.errText}>{String(error)}</Text>
@@ -272,5 +349,37 @@ const styles = StyleSheet.create({
     color: "#FF00FF",
     fontWeight: "700",
     textAlign: "center",
+  },
+  // Toast debug styles
+  toastDebugRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 12,
+  },
+  toastButton: {
+    flex: 1,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  toastButtonSuccess: {
+    backgroundColor: '#4CAF50',
+  },
+  toastButtonError: {
+    backgroundColor: '#EF4444',
+  },
+  toastButtonInfo: {
+    backgroundColor: '#7C3AED',
+  },
+  toastButtonUndo: {
+    backgroundColor: '#F59E0B',
+    marginTop: 0,
+  },
+  toastButtonText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '600',
   },
 });

@@ -432,12 +432,12 @@ const styles = StyleSheet.create({
 
   poster: {
     width: '100%',
-    height: SCREEN_HEIGHT * 0.58,
+    height: SCREEN_HEIGHT * 0.45,
     backgroundColor: '#F5F5F7',
   },
 
   posterExpanded: {
-    height: SCREEN_HEIGHT * 0.45,
+    height: SCREEN_HEIGHT * 0.35,
   },
 
   posterPlaceholder: {

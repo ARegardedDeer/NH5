@@ -14,12 +14,12 @@ import { ActiveCard } from '../../../components/my-list/ActiveCard';
 import { ActiveRow } from '../../../components/my-list/ActiveRow';
 import { ListRow } from '../../../components/my-list/ListRow';
 import { MyListSwipeRow } from '../../../components/my-list/MyListSwipeRow';
-import UndoToast from '../../../components/common/UndoToast';
 import { FloatingActionButton } from '../../../components/shared/FloatingActionButton';
 import { AddAnimeSheet } from '../../../components/add-anime/AddAnimeSheet';
 import HapticFeedback from 'react-native-haptic-feedback';
 import { AppNavigationProp } from '../../../types/navigation';
 import { useUpdateListStatus } from '../../../hooks/useUpdateListStatus';
+import { useToast } from '../../../contexts/ToastContext';
 
 type Tab = 'active' | 'backlog' | 'archive';
 type LayoutMode = 'cards' | 'rows';
@@ -49,16 +49,7 @@ export const MyListScreen = () => {
   const navigation = useNavigation<AppNavigationProp>();
   const updateStatusMutation = useUpdateListStatus();
   const addSheetRef = useRef<BottomSheet>(null);
-  const [undoState, setUndoState] = useState<{
-    visible: boolean;
-    message: string;
-    animeId: string;
-    prevStatus: string;
-    prevCompletedAt?: string | null;
-    prevOriginalCompletedAt?: string | null;
-    prevLastWatchedAt?: string | null;
-    allowUndo?: boolean;
-  } | null>(null);
+  const { showToast } = useToast();
 
   // Get user ID on mount
   useEffect(() => {
@@ -139,12 +130,10 @@ export const MyListScreen = () => {
 
     if (!nextStatus) {
       if (reason === 'NOOP_COMPLETED') {
-        setUndoState({
-          visible: true,
-          message: "Already completed — can’t drop",
-          animeId: item.anime_id,
-          prevStatus: item.status,
-          allowUndo: false,
+        showToast({
+          message: "Already completed — can't drop",
+          type: 'error',
+          duration: 4000,
         });
       }
       return;
@@ -158,14 +147,33 @@ export const MyListScreen = () => {
       animeId: item.anime_id,
     });
 
-    setUndoState({
-      visible: true,
-      message: `Moved to ${nextStatus} — Undo`,
+    // Capture undo data in closure
+    const undoData = {
       animeId: item.anime_id,
       prevStatus: item.status,
       prevCompletedAt: item.completed_at,
       prevOriginalCompletedAt: item.original_completed_at,
       prevLastWatchedAt: item.last_watched_at,
+    };
+
+    // Show toast with undo
+    showToast({
+      message: `Moved to ${nextStatus}`,
+      type: 'success',
+      duration: 5000,
+      onUndo: () => {
+        if (!userId) return;
+        console.log('[MyListSwipe] undo', undoData);
+
+        updateStatusMutation.mutate({
+          userId,
+          animeId: undoData.animeId,
+          newStatus: undoData.prevStatus,
+          overrideCompletedAt: undoData.prevCompletedAt,
+          overrideOriginalCompletedAt: undoData.prevOriginalCompletedAt,
+          overrideLastWatchedAt: undoData.prevLastWatchedAt,
+        });
+      },
     });
 
     updateStatusMutation.mutate({
@@ -176,27 +184,6 @@ export const MyListScreen = () => {
       ensureStartedNow: payload.ensureStartedNow,
       ensureCurrentEpisodeMin1: payload.ensureCurrentEpisodeMin1,
     });
-  };
-
-  const handleUndo = () => {
-    if (!undoState || !userId) return;
-    console.log('[MyListSwipe] undo', undoState);
-
-    if (undoState.allowUndo === false) {
-      setUndoState(null);
-      return;
-    }
-
-    updateStatusMutation.mutate({
-      userId,
-      animeId: undoState.animeId,
-      newStatus: undoState.prevStatus,
-      overrideCompletedAt: undoState.prevCompletedAt,
-      overrideOriginalCompletedAt: undoState.prevOriginalCompletedAt,
-      overrideLastWatchedAt: undoState.prevLastWatchedAt,
-    });
-
-    setUndoState(null);
   };
 
   const handleInfo = (animeId: string, title?: string) => {
@@ -560,13 +547,6 @@ export const MyListScreen = () => {
           userId={userId}
         />
       )}
-
-      <UndoToast
-        visible={!!undoState?.visible}
-        message={undoState?.message || ''}
-        onUndo={handleUndo}
-        onHide={() => setUndoState(null)}
-      />
 
       {/* Floating Action Button */}
       <FloatingActionButton

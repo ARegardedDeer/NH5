@@ -8,7 +8,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { queryClient } from './state/queryClient';
 import AppNavigator from './app/AppNavigator';
-import { ToastProvider } from './ui/toast/ToastHost';
+import { ToastProvider } from './contexts/ToastContext';
 
 const DEV = __DEV__;
 

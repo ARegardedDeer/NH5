@@ -90,7 +90,7 @@ export function DiscoverySwipeModal({ visible, onClose }: DiscoverySwipeModalPro
 
       Image.prefetch(anime.thumbnail_url)
         .then(() => {
-          preloadedImages.current.add(anime.thumbnail_url);
+          preloadedImages.current.add(anime.thumbnail_url!);
           console.log('[discovery-swipe] ✓ Pre-loaded:', anime.title);
         })
         .catch((err) => {
@@ -299,11 +299,11 @@ export function DiscoverySwipeModal({ visible, onClose }: DiscoverySwipeModalPro
           )}
 
           {!isLoading && !error && !currentCard && (
-            <View style={styles.emptyContainer}>
+            <View style={styles.centeredContent}>
               <Text style={styles.emptyIcon}>🎉</Text>
               <Text style={styles.emptyTitle}>All caught up!</Text>
               <Text style={styles.emptyText}>
-                You've seen all available anime. Check back later for more!
+                You&apos;ve seen all available anime. Check back later for more!
               </Text>
               <Pressable style={styles.closeButton} onPress={onClose}>
                 <Text style={styles.closeButtonText}>Close</Text>
@@ -336,9 +336,7 @@ const styles = StyleSheet.create({
   },
   cardViewport: {
     flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 16,
+    overflow: 'hidden',
   },
   actionsContainer: {
     paddingBottom: 32,
@@ -379,8 +377,13 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
+  },
+  centeredContent: {
+    flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    gap: 12,
+    paddingHorizontal: 40,
   },
   loadingContainer: {
     justifyContent: 'center',
