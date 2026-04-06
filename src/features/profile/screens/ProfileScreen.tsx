@@ -365,7 +365,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   toastButtonSuccess: {
-    backgroundColor: '#4CAF50',
+    backgroundColor: '#34C759',
   },
   toastButtonError: {
     backgroundColor: '#EF4444',

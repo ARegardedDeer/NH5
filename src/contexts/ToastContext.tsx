@@ -12,6 +12,15 @@ export interface ToastOptions {
 interface ToastContextType {
   showToast: (options: ToastOptions) => void;
   hideToast: () => void;
+  // Exposed for rendering toast inside Modals (which create a new native layer)
+  toastState: {
+    visible: boolean;
+    message: string;
+    type: 'success' | 'error' | 'info';
+    duration: number;
+    onUndo?: () => void;
+    undoLabel: string;
+  };
 }
 
 const ToastContext = createContext<ToastContextType | undefined>(undefined);
@@ -53,8 +62,10 @@ export const ToastProvider: React.FC<ToastProviderProps> = ({ children }) => {
     }, 300);
   }, []);
 
+  const toastState = { visible, message, type, duration, onUndo, undoLabel };
+
   return (
-    <ToastContext.Provider value={{ showToast, hideToast }}>
+    <ToastContext.Provider value={{ showToast, hideToast, toastState }}>
       {children}
       {/* Toast renders here at root level */}
       <GlobalToast

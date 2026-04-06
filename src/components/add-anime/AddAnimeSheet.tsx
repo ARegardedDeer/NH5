@@ -520,7 +520,7 @@ const styles = StyleSheet.create({
   seeAllText: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#7C3AED',
+    color: '#007AFF',
     textAlign: 'center',
   },
   resultsList: {

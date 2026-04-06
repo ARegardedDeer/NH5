@@ -19,9 +19,11 @@ import { useDiscoveryQueue } from '../hooks/useDiscoveryQueue';
 import { SwipeCard } from '../components/discovery-swipe/SwipeCard';
 import { ActionButtons } from '../components/discovery-swipe/ActionButtons';
 import { RatingModal } from '../components/discovery-swipe/RatingModal';
+import { GlobalToast } from '../components/shared/GlobalToast';
 import { currentTheme } from '../styles/discoverySwipeStyles';
 import { AppNavigationProp } from '../types/navigation';
 import { navigateToAnimeDetail } from '../utils/navigationHelpers';
+import { useToast } from '../contexts/ToastContext';
 
 interface DiscoverySwipeModalProps {
   visible: boolean;
@@ -31,6 +33,7 @@ interface DiscoverySwipeModalProps {
 export function DiscoverySwipeModal({ visible, onClose }: DiscoverySwipeModalProps) {
   const navigation = useNavigation<AppNavigationProp>();
   const queryClient = useQueryClient();
+  const { showToast, hideToast, toastState } = useToast();
   const [userId, setUserId] = useState<string | null>(null);
   const [showRatingModal, setShowRatingModal] = useState(false);
   const [expandedCard, setExpandedCard] = useState(false);
@@ -101,6 +104,7 @@ export function DiscoverySwipeModal({ visible, onClose }: DiscoverySwipeModalPro
 
   const handleSkip = async () => {
     await handleSwipe('skip');
+    showToast({ message: 'Skipped', type: 'info', duration: 2000 });
   };
 
   const handleRate = async () => {
@@ -159,6 +163,11 @@ export function DiscoverySwipeModal({ visible, onClose }: DiscoverySwipeModalPro
 
     // Record swipe action and move to next card
     await handleSwipe('add');
+    if (!error) {
+      showToast({ message: 'Added to Plan to Watch', type: 'success', duration: 2000 });
+    } else {
+      showToast({ message: 'Failed to add to list', type: 'error', duration: 3000 });
+    }
   };
 
   const handleCardPress = () => {
@@ -192,6 +201,11 @@ export function DiscoverySwipeModal({ visible, onClose }: DiscoverySwipeModalPro
 
     // Record swipe action and move to next card
     await handleSwipe('rate');
+    if (!error) {
+      showToast({ message: `Rated ${rating}/10`, type: 'success', duration: 2000 });
+    } else {
+      showToast({ message: 'Failed to save rating', type: 'error', duration: 3000 });
+    }
   };
 
   const handleRatingCancel = () => {
@@ -324,6 +338,17 @@ export function DiscoverySwipeModal({ visible, onClose }: DiscoverySwipeModalPro
             onSubmit={handleRatingSubmit}
           />
         )}
+
+        {/* Toast rendered inside Modal to appear above the native modal layer */}
+        <GlobalToast
+          visible={toastState.visible}
+          message={toastState.message}
+          type={toastState.type}
+          duration={toastState.duration}
+          onDismiss={hideToast}
+          onUndo={toastState.onUndo}
+          undoLabel={toastState.undoLabel}
+        />
       </GestureHandlerRootView>
     </Modal>
   );

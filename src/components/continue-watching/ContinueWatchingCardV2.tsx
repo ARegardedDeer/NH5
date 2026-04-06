@@ -210,14 +210,10 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#7C3AED',
     marginTop: 4,
-    textShadowColor: 'rgba(124, 58, 237, 0.5)',
-    textShadowOffset: { width: 0, height: 0 },
-    textShadowRadius: 8,
   },
 
   actionCompleted: {
-    color: '#4CAF50',
-    textShadowColor: 'rgba(76, 175, 80, 0.5)',
+    color: '#34C759',
   },
 });
 

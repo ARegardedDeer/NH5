@@ -148,7 +148,7 @@ const styles = StyleSheet.create({
   },
 
   addIconAdded: {
-    backgroundColor: '#4CAF50',
+    backgroundColor: '#34C759',
   },
 
   addIconText: {

@@ -89,7 +89,7 @@ export const GlobalToast: React.FC<GlobalToastProps> = ({
   if (!visible) return null;
 
   const backgroundColor = {
-    success: '#4CAF50',
+    success: '#34C759',
     error: '#EF4444',
     info: '#7C3AED',
   }[type];

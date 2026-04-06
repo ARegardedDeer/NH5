@@ -312,7 +312,7 @@ const styles = StyleSheet.create({
   },
 
   addedButton: {
-    backgroundColor: '#4CAF50', // Green background
+    backgroundColor: '#34C759', // iOS systemGreen
   },
 
   addedButtonText: {
