@@ -255,6 +255,47 @@ import { BlurView } from '@react-native-community/blur';
 // Common use: Navigation bars, tab bars, modals
 ```
 
+> **NH5 Note:** NH5 uses a custom dark theme (`#161022` bg, `#5b13ec` primary) rather than Apple system colors. See NH5_THEME tokens in `.claude/skills/ios-component-patterns.md` §2.
+
+---
+
+## 3.5 Styling Approach: NativeWind Integration
+
+NH5 uses both NativeWind (Tailwind) and `StyleSheet.create()`. Follow this boundary:
+
+| Location | Approach |
+|---|---|
+| `src/ui/components/` | NativeWind Tailwind classNames |
+| Screens & feature components | `StyleSheet.create()` |
+
+```typescript
+// ✅ UI Component — NativeWind
+// src/ui/components/BadgeChip.tsx
+export const BadgeChip = ({ label }: { label: string }) => (
+  <View className="px-3 py-1 bg-purple-600 rounded-full">
+    <Text className="text-xs font-semibold text-white">{label}</Text>
+  </View>
+);
+
+// ✅ Screen — StyleSheet
+// src/screens/HomeScreen.tsx
+const HomeScreen = () => (
+  <View style={styles.container}>
+    <Text style={styles.title}>Home</Text>
+  </View>
+);
+
+const styles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: '#161022' },
+  title: { fontSize: 22, fontWeight: '700', color: '#FFFFFF' },
+});
+
+// ❌ Don't mix in the same component
+<View className="flex-1" style={{ backgroundColor: '#161022' }}>
+```
+
+**See:** `.claude/skills/ios-component-patterns.md` §1 for full conventions.
+
 ---
 
 ## 4. Navigation Patterns
@@ -1073,9 +1114,70 @@ const styles = StyleSheet.create({
 });
 ```
 
+> **NH5 Note:** The actual implementation uses solid-color backgrounds (not BlurView) with `zIndex: 99999`. See `.claude/skills/ios-component-patterns.md` for the exact implementation.
+>
+> **Modal caveat:** When displaying toasts inside a `<Modal>` screen, you must render `GlobalToast` locally inside the modal — root-level toasts are invisible across the native window boundary. See "React Native Modal Layer" section below.
+
 ---
 
-## 12. Search Bar
+## 12. React Native Modal Layer
+
+### The Modal Window Problem
+
+React Native's `<Modal>` component creates a **separate native window** above the main app window. Any component rendered at the app root (toasts, loading overlays, error banners) is **invisible** inside a modal — `zIndex` cannot bridge native window boundaries.
+
+```typescript
+// ❌ This won't work — zIndex is irrelevant across native windows
+<App>
+  <GlobalToast style={{ zIndex: 99999 }} />  {/* Layer 1 */}
+</App>
+
+<Modal>  {/* Layer 2 — separate native window */}
+  <Content />
+  {/* GlobalToast is physically invisible here */}
+</Modal>
+```
+
+### The Solution: Context + Local Render
+
+Share state via React Context, render UI inside the modal's own layer:
+
+```typescript
+// 1. Expose toast state from context (not just actions)
+export const ToastProvider = ({ children }) => {
+  const [toastState, setToastState] = useState({ visible: false, message: '' });
+
+  return (
+    <ToastContext.Provider value={{ showToast, hideToast, toastState }}>
+      {children}
+      <GlobalToast {...toastState} />  {/* For non-modal screens */}
+    </ToastContext.Provider>
+  );
+};
+
+// 2. Modal renders its own instance, driven by shared state
+const MyModal = () => {
+  const { showToast, hideToast, toastState } = useToast();
+
+  return (
+    <Modal visible={visible}>
+      <Content onAction={() => showToast({ message: 'Done!' })} />
+      <GlobalToast {...toastState} onDismiss={hideToast} />  {/* Visible here */}
+    </Modal>
+  );
+};
+```
+
+### Applies To
+- Global toasts in modals ← most common
+- Loading overlays inside modals
+- Any overlay UI crossing the modal boundary
+
+**See:** `.claude/skills/ios-component-patterns.md` §3 for full pattern.
+
+---
+
+## 13. Search Bar
 
 ### iOS Standard Search
 ```typescript
@@ -1169,7 +1271,7 @@ const styles = StyleSheet.create({
 
 ---
 
-## 13. Accessibility
+## 14. Accessibility
 
 ### VoiceOver Support
 ```typescript
