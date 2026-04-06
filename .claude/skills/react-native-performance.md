@@ -11,6 +11,8 @@ Best practices for optimizing React Native apps, focusing on data fetching, bund
 - Reducing bundle size
 - Implementing Suspense boundaries
 
+> **TanStack Query Version:** This skill targets v5. The `suspense: true` option was removed in v5 — use `useSuspenseQuery` instead.
+
 ---
 
 ## 1. Eliminate Async Waterfalls
@@ -107,13 +109,16 @@ return (
 
 ### ✅ Good: Suspense + Skeleton
 ```typescript
-// In hook:
-return useQuery({
-  queryKey: ['continue-watching', userId],
-  queryFn: () => fetchContinueWatching(userId),
-  suspense: true,  // Enable Suspense
-  enabled: !!userId,
-});
+// In hook (TanStack Query v5):
+import { useSuspenseQuery } from '@tanstack/react-query';
+
+export const useContinueWatching = (userId: string) => {
+  return useSuspenseQuery({
+    queryKey: ['continue-watching', userId],
+    queryFn: () => fetchContinueWatching(userId),
+    // No suspense option — useSuspenseQuery handles it
+  });
+};
 
 // In component:
 <Suspense fallback={<ContinueWatchingSkeleton />}>
@@ -275,9 +280,15 @@ When reviewing code, check:
 
 ### Rendering
 - [ ] All queries have Suspense boundaries
+- [ ] Using `useSuspenseQuery` (not `useQuery({ suspense: true })`)
 - [ ] Skeletons match final content dimensions
 - [ ] No layout shift (0 CLS)
 - [ ] Heavy components are memoized
+
+### Reanimated
+- [ ] `useAnimatedStyle` uses shared values, not React state
+- [ ] JS function calls from worklets use `runOnJS`
+- [ ] Animated styles are stable references (not inline)
 
 ### React Query
 - [ ] Queries use hierarchical keys
@@ -347,17 +358,18 @@ export const useAuthUser = () => {
       return data?.user?.id ?? null;
     },
     staleTime: Infinity,
-    suspense: false,  // Auth doesn't need Suspense
+    // Auth doesn't need Suspense — use regular useQuery
   });
 };
 
 // src/hooks/useContinueWatching.ts
-export const useContinueWatching = (userId: string | null) => {
-  return useQuery({
+import { useSuspenseQuery } from '@tanstack/react-query';
+
+export const useContinueWatching = (userId: string) => {
+  return useSuspenseQuery({
     queryKey: ['continue-watching', userId],
-    queryFn: () => fetchContinueWatching(userId!),
-    enabled: !!userId,
-    suspense: true,  // Enable Suspense for skeleton
+    queryFn: () => fetchContinueWatching(userId),
+    // v5: useSuspenseQuery replaces useQuery + suspense: true
   });
 };
 ```
@@ -370,13 +382,138 @@ export const useContinueWatching = (userId: string | null) => {
 
 ---
 
+## TanStack Query v5 Migration Notes
+
+**Breaking Change:** The `suspense` option was removed from `useQuery` in v5.
+
+| v4 | v5 |
+|---|---|
+| `useQuery({ suspense: true })` | `useSuspenseQuery()` |
+| `useInfiniteQuery({ suspense: true })` | `useSuspenseInfiniteQuery()` |
+| `useQuery({ suspense: false })` | `useQuery()` (unchanged) |
+
+```typescript
+// ❌ v4 (deprecated, broken in v5)
+const { data } = useQuery({
+  queryKey: ['key'],
+  queryFn: fn,
+  suspense: true,
+});
+
+// ✅ v5
+import { useSuspenseQuery } from '@tanstack/react-query';
+
+const { data } = useSuspenseQuery({
+  queryKey: ['key'],
+  queryFn: fn,
+});
+```
+
+**When to use each:**
+- `useQuery` — Normal queries with manual loading/error states
+- `useSuspenseQuery` — Queries inside a `<Suspense>` boundary (skeleton pattern)
+- `useSuspenseInfiniteQuery` — Infinite scroll with Suspense
+
+---
+
+## Reanimated Worklets & Performance
+
+### The Worklet Pattern
+
+Reanimated runs animations on the UI thread (not JS thread) for 60fps performance. Functions that run on the UI thread must be marked as worklets.
+
+```typescript
+import { useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
+
+// ✅ Good - useAnimatedStyle is implicitly a worklet
+const animatedStyle = useAnimatedStyle(() => ({
+  transform: [{ translateX: position.value }],
+  opacity: opacity.value,
+}));
+
+// ✅ Good - Explicit worklet directive for custom functions
+function clamp(value: number, min: number, max: number) {
+  'worklet';
+  return Math.min(Math.max(value, min), max);
+}
+```
+
+### Cross-Thread Communication: runOnJS
+
+Use `runOnJS` to call regular JS functions (state setters, toasts, navigation) from worklets:
+
+```typescript
+import { runOnJS, useAnimatedStyle } from 'react-native-reanimated';
+
+const MyComponent = () => {
+  const { showToast } = useToast();
+
+  const handleSwipeComplete = useCallback(() => {
+    showToast({ message: 'Swiped!' });
+  }, [showToast]);
+
+  const gestureHandler = useAnimatedGestureHandler({
+    onEnd: () => {
+      'worklet';
+      // ✅ Good - wrap JS function with runOnJS
+      runOnJS(handleSwipeComplete)();
+      // ❌ Bad - direct call from worklet will crash
+      // handleSwipeComplete();
+    },
+  });
+};
+```
+
+### Shared Values vs State
+
+```typescript
+// ❌ Bad - React state doesn't update inside worklets
+const [isVisible, setIsVisible] = useState(false);
+
+const animatedStyle = useAnimatedStyle(() => ({
+  opacity: isVisible ? 1 : 0,  // Won't react to state changes
+}));
+
+// ✅ Good - Shared values update on UI thread
+const opacity = useSharedValue(0);
+
+useEffect(() => {
+  opacity.value = withSpring(isVisible ? 1 : 0);
+}, [isVisible]);
+
+const animatedStyle = useAnimatedStyle(() => ({
+  opacity: opacity.value,
+}));
+```
+
+### Performance Tips
+
+```typescript
+// ❌ Bad - Inline style (new object every render)
+<Animated.View style={useAnimatedStyle(() => ({ opacity: val.value }))} />
+
+// ✅ Good - Stable reference
+const animatedStyle = useAnimatedStyle(() => ({ opacity: val.value }));
+<Animated.View style={animatedStyle} />
+
+// ✅ Good - Batch shared value updates before animating
+translateX.value = 0;
+translateY.value = 0;
+opacity.value = withSpring(1);  // Trigger single animation frame
+```
+
+---
+
 ## Common Pitfalls
 
 1. **Suspense without fallback:** Always provide a skeleton/fallback
-2. **Over-invalidation:** Be specific with query keys
-3. **Missing `enabled`:** Always gate queries on dependencies
-4. **Forgetting `staleTime`:** Auth queries should have `Infinity`
-5. **Not using `React.memo`:** Large lists need memoization
+2. **`suspense: true` on useQuery:** Removed in v5 — use `useSuspenseQuery`
+3. **Over-invalidation:** Be specific with query keys
+4. **Missing `enabled`:** Always gate queries on dependencies
+5. **Forgetting `staleTime`:** Auth queries should have `Infinity`
+6. **Not using `React.memo`:** Large lists need memoization
+7. **Direct JS calls from worklets:** Use `runOnJS` for cross-thread calls
+8. **React state in animated styles:** Use `useSharedValue` instead
 
 ---
 
