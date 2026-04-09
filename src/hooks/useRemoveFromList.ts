@@ -12,15 +12,23 @@ export const useRemoveFromList = () => {
 
   return useMutation({
     mutationFn: async ({ userId, animeId }: RemoveFromListParams) => {
-      console.log('[useRemoveFromList] Removing anime:', animeId);
+      console.log('[useRemoveFromList] Removing:', { userId, animeId });
 
-      const { error } = await supabase
+      const { data, error, count } = await supabase
         .from('user_lists')
         .delete()
         .eq('user_id', userId)
-        .eq('anime_id', animeId);
+        .eq('anime_id', animeId)
+        .select();
+
+      console.log('[useRemoveFromList] Result:', { rowsDeleted: data?.length, count, error });
 
       if (error) throw error;
+
+      if (!data || data.length === 0) {
+        console.warn('[useRemoveFromList] ⚠️ Delete matched 0 rows — userId:', userId, 'animeId:', animeId);
+        throw new Error(`No row found for userId=${userId} animeId=${animeId}`);
+      }
 
       return { animeId };
     },
@@ -28,7 +36,6 @@ export const useRemoveFromList = () => {
     onSuccess: (_, variables) => {
       HapticFeedback.trigger('notificationSuccess');
 
-      // Invalidate all list queries
       queryClient.invalidateQueries({ queryKey: ['my-list-active', variables.userId] });
       queryClient.invalidateQueries({ queryKey: ['my-list-status', variables.userId] });
       queryClient.invalidateQueries({ queryKey: ['continue-watching', variables.userId] });

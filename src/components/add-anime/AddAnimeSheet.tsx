@@ -6,7 +6,6 @@ import { useNavigation } from '@react-navigation/native';
 import { supabase, whenAuthed } from '../../db/supabaseClient';
 import { useAnimeSearch } from '../../hooks/useAnimeSearch';
 import { useAddToList } from '../../hooks/useAddToList';
-import { useRemoveFromList } from '../../hooks/useRemoveFromList';
 import { useInvalidateSearchCache } from '../../hooks/useInvalidateSearchCache';
 import { useToast } from '../../contexts/ToastContext';
 import { InlineSuggestion } from './InlineSuggestion';
@@ -46,7 +45,6 @@ export const AddAnimeSheet = React.forwardRef<BottomSheet, AddAnimeSheetProps>(
     });
 
     const addToListMutation = useAddToList();
-    const removeFromListMutation = useRemoveFromList();
     const invalidateSearchCache = useInvalidateSearchCache();
     const { showToast } = useToast();
 
@@ -140,19 +138,6 @@ export const AddAnimeSheet = React.forwardRef<BottomSheet, AddAnimeSheetProps>(
             },
             {
               onSuccess: () => {
-                console.log('[AddAnimeSheet] ✅ Add successful, showing toast for:', anime.title);
-                showToast({
-                  message: `Added "${anime.title}"`,
-                  type: 'success',
-                  duration: 5000,
-                  onUndo: () => {
-                    console.log('[AddAnimeSheet] 🔄 Undo add:', anime.title);
-                    removeFromListMutation.mutate({
-                      userId,
-                      animeId: anime.id,
-                    });
-                  },
-                });
                 resolve();
               },
               onError: (error) => {
@@ -168,7 +153,7 @@ export const AddAnimeSheet = React.forwardRef<BottomSheet, AddAnimeSheetProps>(
           );
         });
       },
-      [userId, addToListMutation, removeFromListMutation, showToast]
+      [userId, addToListMutation, showToast]
     );
 
     const renderBackdrop = useCallback(

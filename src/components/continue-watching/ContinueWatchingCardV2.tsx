@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { View, Text, Pressable, Image, StyleSheet } from 'react-native';
+import { Text, Pressable, Image, StyleSheet, ActionSheetIOS, Platform } from 'react-native';
+import Animated, { useAnimatedStyle, useSharedValue, withTiming, runOnJS } from 'react-native-reanimated';
 import { useNavigation } from '@react-navigation/native';
 import LinearGradient from 'react-native-linear-gradient';
 import HapticFeedback from 'react-native-haptic-feedback';
@@ -19,125 +20,102 @@ interface ContinueWatchingCardV2Props {
   currentEpisode: number;
   totalEpisodes: number | null;
   onContinue: () => void;
+  onRemove?: () => void;
 }
 
 export const ContinueWatchingCardV2: React.FC<ContinueWatchingCardV2Props> = ({
   anime,
   currentEpisode,
-  totalEpisodes,
   status,
   onContinue,
+  onRemove,
 }) => {
   const navigation = useNavigation<AppNavigationProp>();
   const [imageError, setImageError] = useState(false);
+  const opacity = useSharedValue(1);
+  const scale = useSharedValue(1);
 
-  // Display title (series name if multi-season)
   const displayTitle = anime.series?.title || anime.title;
-
-  // Calculate progress
-  const progress = totalEpisodes
-    ? Math.round((currentEpisode / totalEpisodes) * 100)
-    : null;
-
-  // Single episode check (movies/OVAs)
-  const isSingleEpisode = totalEpisodes === 1;
   const isCompleted = status === 'Completed';
 
-  // Progress text
-  const getProgressText = () => {
-    if (isSingleEpisode) {
-      return isCompleted ? 'Watched' : 'Movie';
-    }
-
-    if (totalEpisodes) {
-      return `Ep ${currentEpisode} • ${progress}%`;
-    }
-
-    return `Episode ${currentEpisode}`;
-  };
-
-  // Action text
-  const getActionText = () => {
-    if (isSingleEpisode) {
-      return isCompleted ? '✓ Watched' : '▶ Watch';
-    }
-    return '▶ Continue';
-  };
+  const animatedStyle = useAnimatedStyle(() => ({
+    opacity: opacity.value,
+    transform: [{ scale: scale.value }],
+  }));
 
   const handlePress = () => {
-    if (isSingleEpisode && isCompleted) return;
+    if (isCompleted) return;
     HapticFeedback.trigger('impactLight');
     onContinue();
   };
 
-  const handleInfoPress = (e: any) => {
-    e.stopPropagation();
-    HapticFeedback.trigger('impactLight');
-    navigateToAnimeDetail(navigation, anime.id, anime.title);
+  const triggerRemove = () => {
+    opacity.value = withTiming(0, { duration: 200 });
+    scale.value = withTiming(0.8, { duration: 200 }, () => {
+      if (onRemove) runOnJS(onRemove)();
+    });
+  };
+
+  const handleLongPress = () => {
+    HapticFeedback.trigger('impactMedium');
+    if (Platform.OS === 'ios') {
+      ActionSheetIOS.showActionSheetWithOptions(
+        {
+          options: ['Remove from Continue Watching', 'View Anime Details', 'Cancel'],
+          destructiveButtonIndex: 0,
+          cancelButtonIndex: 2,
+        },
+        (buttonIndex) => {
+          if (buttonIndex === 0) {
+            triggerRemove();
+          } else if (buttonIndex === 1) {
+            navigateToAnimeDetail(navigation, anime.id, anime.title);
+          }
+        }
+      );
+    }
   };
 
   return (
-    <Pressable
-      style={({ pressed }) => [
-        styles.card,
-        pressed && !isCompleted && { opacity: 0.85, transform: [{ scale: 0.98 }] }
-      ]}
-      onPress={handlePress}
-      disabled={isSingleEpisode && isCompleted}
-      accessibilityLabel={`${displayTitle}, episode ${currentEpisode}`}
-      accessibilityRole="button"
-    >
-      {/* Poster */}
-      <Image
-        source={{
-          uri: imageError
-            ? 'https://via.placeholder.com/140x200/1D1D1F/86868B?text=No+Image'
-            : anime.thumbnail_url || undefined
-        }}
-        style={styles.poster}
-        resizeMode="cover"
-        onError={() => setImageError(true)}
-      />
-
-      {/* Info Button (top right) */}
+    <Animated.View style={animatedStyle}>
       <Pressable
-        style={styles.infoButton}
-        onPress={handleInfoPress}
-        hitSlop={{ top: 9, bottom: 9, left: 9, right: 9 }}
-        accessibilityLabel={`More info about ${displayTitle}`}
+        style={({ pressed }) => [
+          styles.card,
+          pressed && !isCompleted && { opacity: 0.85, transform: [{ scale: 0.98 }] },
+        ]}
+        onPress={handlePress}
+        onLongPress={handleLongPress}
+        disabled={isCompleted}
+        accessibilityLabel={`${displayTitle}, episode ${currentEpisode}`}
         accessibilityRole="button"
       >
-        <Text style={styles.infoIcon}>ⓘ</Text>
-      </Pressable>
+        {/* Poster */}
+        <Image
+          source={{
+            uri: imageError
+              ? 'https://via.placeholder.com/140x200/1D1D1F/86868B?text=No+Image'
+              : anime.thumbnail_url || undefined,
+          }}
+          style={styles.poster}
+          resizeMode="cover"
+          onError={() => setImageError(true)}
+        />
 
-      {/* Bottom Gradient Overlay */}
-      <LinearGradient
-        colors={['transparent', 'rgba(0,0,0,0.85)']}
-        style={styles.gradientOverlay}
-      >
-        <View style={styles.infoContainer}>
-          {/* Title */}
-          <Text style={styles.title} numberOfLines={2}>
+        {/* Bottom Gradient Overlay */}
+        <LinearGradient
+          colors={['rgba(0,0,0,0)', 'rgba(0,0,0,1)']}
+          locations={[0.2, 1]}
+          style={styles.gradientOverlay}
+        >
+          <Text style={styles.title} numberOfLines={1}>
             {displayTitle}
           </Text>
-
-          {/* Progress */}
-          <Text style={styles.progress}>
-            {getProgressText()}
+          <Text style={styles.episode}>
+            Ep {currentEpisode}
           </Text>
-
-          {/* Action */}
-          <Text
-            style={[
-              styles.action,
-              isSingleEpisode && isCompleted && styles.actionCompleted
-            ]}
-          >
-            {getActionText()}
-          </Text>
-        </View>
-      </LinearGradient>
-    </Pressable>
+        </LinearGradient>
+      </Pressable>
+    </Animated.View>
   );
 };
 
@@ -147,34 +125,15 @@ const styles = StyleSheet.create({
     height: 200,
     borderRadius: 12,
     overflow: 'hidden',
-    position: 'relative',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 3,
+    backgroundColor: '#1e1230',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
   },
 
   poster: {
     width: '100%',
     height: '100%',
-  },
-
-  infoButton: {
     position: 'absolute',
-    top: 8,
-    right: 8,
-    width: 26,
-    height: 26,
-    borderRadius: 13,
-    backgroundColor: 'rgba(0, 0, 0, 0.6)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-
-  infoIcon: {
-    fontSize: 14,
-    color: '#FFFFFF',
   },
 
   gradientOverlay: {
@@ -182,38 +141,30 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    height: 70,
+    height: 85,
     justifyContent: 'flex-end',
     paddingHorizontal: 10,
     paddingBottom: 10,
   },
 
-  infoContainer: {
-    gap: 2,
+  title: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    letterSpacing: 0.1,
+    marginBottom: 4,
+    textShadowColor: 'rgba(0, 0, 0, 0.8)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
   },
 
-  title: {
+  episode: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#FFFFFF',
-    lineHeight: 16,
-  },
-
-  progress: {
-    fontSize: 12,
-    color: '#C7C7CC',
-    marginTop: 2,
-  },
-
-  action: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#7C3AED',
-    marginTop: 4,
-  },
-
-  actionCompleted: {
-    color: '#34C759',
+    color: 'rgba(255, 255, 255, 0.9)',
+    textShadowColor: 'rgba(0, 0, 0, 0.8)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
   },
 });
 

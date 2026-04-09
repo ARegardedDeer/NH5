@@ -1,9 +1,15 @@
-import React, { useState } from 'react';
-import { View, Text, FlatList, Pressable, StyleSheet } from 'react-native';
+import React, { useState, useCallback } from 'react';
+import { View, Text, FlatList, Pressable, StyleSheet, LayoutAnimation, Platform, UIManager } from 'react-native';
+import { useQueryClient } from '@tanstack/react-query';
 import { useContinueWatching } from '../../hooks/useContinueWatching';
+import { useUpdateListStatus } from '../../hooks/useUpdateListStatus';
 import { ContinueWatchingCard } from './ContinueWatchingCard';
 import { ContinueWatchingCardV2 } from './ContinueWatchingCardV2';
 import { EpisodePickerModal } from './EpisodePickerModal';
+
+if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
 
 const USE_V2 = true;
 
@@ -19,6 +25,8 @@ export const ContinueWatchingSection: React.FC<ContinueWatchingSectionProps> = (
   onSeeAll,
 }) => {
   const { data: continueWatching, isLoading, error } = useContinueWatching({ limit, userId });
+  const updateStatusMutation = useUpdateListStatus();
+  const queryClient = useQueryClient();
   const [selectedAnime, setSelectedAnime] = useState<any>(null);
 
   const handleContinue = (item: any) => {
@@ -28,6 +36,27 @@ export const ContinueWatchingSection: React.FC<ContinueWatchingSectionProps> = (
   const handleCloseModal = () => {
     setSelectedAnime(null);
   };
+
+  const handleRemove = useCallback((animeId: string) => {
+    if (!userId) return;
+    const queryKey = ['continue-watching', userId, limit];
+    const previousData = queryClient.getQueryData(queryKey);
+
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    queryClient.setQueryData(queryKey, (old: any) =>
+      old?.filter((item: any) => item.anime_id !== animeId) ?? old
+    );
+
+    updateStatusMutation.mutate(
+      { userId, animeId, newStatus: 'On Hold' },
+      {
+        onError: () => {
+          LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+          queryClient.setQueryData(queryKey, previousData);
+        },
+      }
+    );
+  }, [userId, limit, updateStatusMutation, queryClient]);
 
   const handleSeriesComplete = (animeId: string) => {
     // TODO: Show rating modal and badge unlock
@@ -90,6 +119,7 @@ export const ContinueWatchingSection: React.FC<ContinueWatchingSectionProps> = (
               currentEpisode={item.current_episode}
               totalEpisodes={item.total_episodes}
               onContinue={() => handleContinue(item)}
+              onRemove={() => handleRemove(item.anime_id)}
             />
           ) : (
             <ContinueWatchingCard
