@@ -14,6 +14,8 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import RewatchModal from '../../profile/components/RewatchModal';
+import PrismaticText from '../../../components/PrismaticText';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRoute } from '@react-navigation/native';
 import { AnimeDetailRouteProp } from '../../../types/navigation';
@@ -29,7 +31,7 @@ import { useToast } from '../../../contexts/ToastContext';
 const DEV = __DEV__;
 const DEV_VERBOSE = __DEV__ && false; // flip to true for deep debugging
 const HIT_SLOP = { top: 8, right: 8, bottom: 8, left: 8 };
-const STATUSES = ['Watching', 'On Hold', 'Completed', 'Dropped', 'Plan to Watch'] as const;
+const STATUSES = ['Watching', 'Rewatching', 'Plan to Watch', 'On Hold', 'Completed', 'Dropped'] as const;
 
 // Haptic feedback helper (best-effort)
 const haptic = (type: 'light' | 'medium' | 'heavy') => {
@@ -75,7 +77,10 @@ export default function AnimeDetailScreen() {
 
   const [bookmarked, setBookmarked] = useState(false);
   const [status, setStatus] = useState<StatusOption | null>(null);
+  const [rewatchCount, setRewatchCount] = useState(0);
+  const [showRewatchModal, setShowRewatchModal] = useState(false);
   const [statusMenuOpen, setStatusMenuOpen] = useState(false);
+  const [showFullStatusPicker, setShowFullStatusPicker] = useState(false);
   const [isStoryExpanded, setIsStoryExpanded] = useState(false);
   const [authReady, setAuthReady] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
@@ -145,7 +150,7 @@ export default function AnimeDetailScreen() {
 
     const { data: rows, error } = await supabase
       .from('user_lists')
-      .select('status,bookmarked')
+      .select('status,bookmarked,rewatch_count')
       .eq('user_id', currentUserId)
       .eq('anime_id', id)
       .limit(1);
@@ -163,6 +168,7 @@ export default function AnimeDetailScreen() {
     if (rows && rows[0]) {
       setBookmarked(!!rows[0].bookmarked);
       setStatus(rows[0].status ?? null);
+      setRewatchCount(rows[0].rewatch_count ?? 0);
       setHasLoadedOnce(true);
       // Write cache for next time
       AsyncStorage.setItem(getUserListCacheKey(id), JSON.stringify({
@@ -173,6 +179,7 @@ export default function AnimeDetailScreen() {
       // no row: reflect defaults
       setBookmarked(false);
       setStatus(null);
+      setRewatchCount(0);
       setHasLoadedOnce(true);
     }
   }, [authReady, id]);
@@ -181,6 +188,7 @@ export default function AnimeDetailScreen() {
   useEffect(() => {
     loadUserListRow();
   }, [loadUserListRow, reloadKey]);
+
 
   useEffect(() => {
     if (!authReady || !id) return;
@@ -330,17 +338,21 @@ export default function AnimeDetailScreen() {
         const payload: any = {
           user_id: userId,
           anime_id: animeId,
-          status: nextStatus,
+          status: nextStatus ?? 'Plan to Watch',
           bookmarked: nextBookmarked,
           updated_at: now,
         };
 
         // Add episode tracking columns based on status
-        // Status values must match DB constraint: 'Watching', 'Plan to Watch', 'Completed', 'On Hold', 'Dropped'
         if (nextStatus === 'Watching') {
           payload.current_episode = 1;
           payload.total_episodes = episodesCount;
           payload.started_at = now;
+          payload.last_watched_at = now;
+        } else if (nextStatus === 'Rewatching') {
+          // Reset progress to ep 1 for a fresh rewatch
+          payload.current_episode = 1;
+          payload.total_episodes = episodesCount;
           payload.last_watched_at = now;
         } else if (nextStatus === 'Plan to Watch') {
           payload.current_episode = 0;
@@ -433,18 +445,36 @@ export default function AnimeDetailScreen() {
     setStatusMenuOpen(false);
     const userId = await getCurrentUserId();
     const persisted = await persistUserList({ userId, animeId: id, bookmarked: next, status });
-    if (DEV) {
-      const statusLabel = status ?? 'none';
-      console.log(`[anime] lists: user=${userId ?? 'none'} anime=${id} op=toggle status=${statusLabel} persisted=${persisted}`);
-    }
-    if (persisted) {
-      setReloadKey((k) => k + 1);
+    if (!persisted) {
+      // Rollback optimistic update on failure
+      setBookmarked(!next);
     }
   }, [bookmarked, id, persistUserList, status]);
 
   const onToggleStatusMenu = useCallback(() => {
-    setStatusMenuOpen((prev) => !prev);
+    setStatusMenuOpen((prev) => {
+      if (prev) setShowFullStatusPicker(false);
+      return !prev;
+    });
   }, []);
+
+  const handleRemoveFromList = useCallback(async () => {
+    setStatusMenuOpen(false);
+    const userId = await getCurrentUserId();
+    if (!userId) return;
+    const { error } = await supabase
+      .from('user_lists')
+      .delete()
+      .eq('user_id', userId)
+      .eq('anime_id', id);
+    if (!error) {
+      setStatus(null);
+      setBookmarked(false);
+      setRewatchCount(0);
+    } else if (DEV) {
+      console.warn('[anime] remove error:', error.message);
+    }
+  }, [id]);
 
   const onSelectStatus = useCallback(
     async (next: StatusOption) => {
@@ -464,6 +494,28 @@ export default function AnimeDetailScreen() {
     },
     [bookmarked, id, persistUserList]
   );
+
+  const handleSaveRewatch = useCallback(async (count: number) => {
+    setRewatchCount(count);
+    setShowRewatchModal(false);
+    const userId = await getCurrentUserId();
+    if (!userId) return;
+    const { error } = await supabase
+      .from('user_lists')
+      .update({ rewatch_count: count })
+      .eq('user_id', userId)
+      .eq('anime_id', id);
+    if (error) {
+      if (DEV) console.warn('[anime] rewatch update error:', error.message);
+    } else {
+      queryClient.invalidateQueries({ queryKey: ['profile-stats'] });
+    }
+  }, [id, queryClient]);
+
+  const onCompletedBadgePress = useCallback(() => {
+    haptic('medium');
+    setShowRewatchModal(true);
+  }, []);
 
   const synopsis = typeof data?.synopsis === 'string' ? data.synopsis.trim() : '';
   const storyText = synopsis.length > 0 ? synopsis : 'Synopsis coming soon.';
@@ -627,7 +679,10 @@ export default function AnimeDetailScreen() {
 
   const heroSource = data?.thumbnail_url ? { uri: data.thumbnail_url } : null;
   const bookmarkIcon = bookmarked ? '★' : '☆';
-  const statusButtonLabel = status ?? 'Status';
+  // isRewatching is only used for badge visibility; button always shows actual status
+  const isRewatching = status === 'Rewatching' || (status === 'Completed' && rewatchCount > 0);
+  const statusButtonLabel = status ?? 'Add to List';
+
 
   const statusControls = !authReady ? (
     <View style={{ width: 100, height: 36, borderRadius: 18, backgroundColor: 'rgba(0,0,0,0.55)', alignItems: 'center', justifyContent: 'center', marginRight: 12 }}>
@@ -639,11 +694,15 @@ export default function AnimeDetailScreen() {
         onPress={onToggleStatusMenu}
         hitSlop={HIT_SLOP}
         style={({ pressed }) => [
-          { borderRadius: 18, paddingHorizontal: 14, paddingVertical: 8, backgroundColor: 'rgba(0,0,0,0.55)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.24)' },
+          { borderRadius: 18, paddingHorizontal: 14, paddingVertical: 8, backgroundColor: 'rgba(0,0,0,0.55)', borderWidth: 1, borderColor: status === 'Rewatching' ? 'rgba(167,139,250,0.6)' : 'rgba(255,255,255,0.24)' },
           pressed && { opacity: 0.85 },
         ]}
       >
-        <Text style={{ color: '#fff', fontSize: 13, fontWeight: '600' }}>{statusButtonLabel}</Text>
+        {status === 'Rewatching' ? (
+          <PrismaticText>{statusButtonLabel}</PrismaticText>
+        ) : (
+          <Text style={{ color: '#fff', fontSize: 13, fontWeight: '600' }}>{statusButtonLabel}</Text>
+        )}
       </Pressable>
       {statusMenuOpen ? (
         <View
@@ -651,14 +710,13 @@ export default function AnimeDetailScreen() {
             position: 'absolute',
             top: 44,
             left: 0,
-            right: 0,
             backgroundColor: 'rgba(12,11,23,0.92)',
             borderRadius: 12,
             borderWidth: 1,
             borderColor: 'rgba(167,139,250,0.45)',
             paddingVertical: 4,
             zIndex: 5,
-            minWidth: 140,
+            minWidth: 160,
             shadowColor: '#000',
             shadowOpacity: 0.3,
             shadowRadius: 8,
@@ -666,18 +724,82 @@ export default function AnimeDetailScreen() {
             elevation: 6,
           }}
         >
-          {STATUSES.map((option) => (
-            <Pressable
-              key={option}
-              onPress={() => onSelectStatus(option)}
-              style={({ pressed }) => [
-                { paddingVertical: 8, paddingHorizontal: 12 },
-                pressed && { backgroundColor: 'rgba(167,139,250,0.18)' },
-              ]}
-            >
-              <Text style={{ color: '#fff', fontSize: 13, fontWeight: '600' }}>{option}</Text>
-            </Pressable>
-          ))}
+          {(status === 'Completed' || status === 'Rewatching') && !showFullStatusPicker ? (
+            <>
+              <Pressable
+                onPress={() => { setStatusMenuOpen(false); setShowRewatchModal(true); }}
+                style={({ pressed }) => [{ paddingVertical: 10, paddingHorizontal: 14 }, pressed && { backgroundColor: 'rgba(167,139,250,0.18)' }]}
+              >
+                <Text style={{ color: '#fff', fontSize: 13, fontWeight: '600' }}>Edit Rewatch Count</Text>
+              </Pressable>
+              {status === 'Completed' ? (
+                <Pressable
+                  onPress={() => { onSelectStatus('Rewatching'); }}
+                  style={({ pressed }) => [{ paddingVertical: 10, paddingHorizontal: 14 }, pressed && { backgroundColor: 'rgba(167,139,250,0.18)' }]}
+                >
+                  <PrismaticText>Watch Again</PrismaticText>
+                </Pressable>
+              ) : (
+                <>
+                  <Pressable
+                    onPress={() => { onSelectStatus('On Hold'); setStatusMenuOpen(false); }}
+                    style={({ pressed }) => [{ paddingVertical: 10, paddingHorizontal: 14 }, pressed && { backgroundColor: 'rgba(167,139,250,0.18)' }]}
+                  >
+                    <Text style={{ color: '#fff', fontSize: 13, fontWeight: '600' }}>Put On Hold</Text>
+                  </Pressable>
+                  <Pressable
+                    onPress={async () => {
+                      const newCount = rewatchCount + 1;
+                      setRewatchCount(newCount);
+                      onSelectStatus('Completed');
+                      setStatusMenuOpen(false);
+                      const userId = await getCurrentUserId();
+                      if (!userId) return;
+                      await supabase
+                        .from('user_lists')
+                        .update({ rewatch_count: newCount })
+                        .eq('user_id', userId)
+                        .eq('anime_id', id);
+                      queryClient.invalidateQueries({ queryKey: ['profile-stats'] });
+                    }}
+                    style={({ pressed }) => [{ paddingVertical: 10, paddingHorizontal: 14 }, pressed && { backgroundColor: 'rgba(167,139,250,0.18)' }]}
+                  >
+                    <Text style={{ color: '#34C759', fontSize: 13, fontWeight: '600' }}>Mark Completed</Text>
+                  </Pressable>
+                </>
+              )}
+              <Pressable
+                onPress={() => setShowFullStatusPicker(true)}
+                style={({ pressed }) => [{ paddingVertical: 10, paddingHorizontal: 14 }, pressed && { backgroundColor: 'rgba(167,139,250,0.18)' }]}
+              >
+                <Text style={{ color: '#fff', fontSize: 13, fontWeight: '600' }}>Change Status</Text>
+              </Pressable>
+              <Pressable
+                onPress={handleRemoveFromList}
+                style={({ pressed }) => [{ paddingVertical: 10, paddingHorizontal: 14 }, pressed && { backgroundColor: 'rgba(167,139,250,0.18)' }]}
+              >
+                <Text style={{ color: '#FF6B6B', fontSize: 13, fontWeight: '600' }}>Remove from List</Text>
+              </Pressable>
+            </>
+          ) : (
+            STATUSES.map((option) => (
+              <Pressable
+                key={option}
+                onPress={() => { onSelectStatus(option); setStatusMenuOpen(false); setShowFullStatusPicker(false); }}
+                style={({ pressed }) => [
+                  { paddingVertical: 10, paddingHorizontal: 14 },
+                  pressed && { backgroundColor: 'rgba(167,139,250,0.18)' },
+                  option === status && { backgroundColor: 'rgba(167,139,250,0.1)' },
+                ]}
+              >
+                {option === 'Rewatching' ? (
+                  <PrismaticText>{option}</PrismaticText>
+                ) : (
+                  <Text style={{ color: option === status ? '#C9C4FF' : '#fff', fontSize: 13, fontWeight: '600' }}>{option}</Text>
+                )}
+              </Pressable>
+            ))
+          )}
         </View>
       ) : null}
     </View>
@@ -834,6 +956,24 @@ export default function AnimeDetailScreen() {
           onPress={() => setRatingUIOpen(true)}
         />
 
+        {status && (status === 'Completed' || status === 'Rewatching' || rewatchCount > 0) && (
+          <Pressable
+            onPress={onCompletedBadgePress}
+            style={({ pressed }) => [styles.completedBadge, pressed && { opacity: 0.7 }]}
+          >
+            <Text style={styles.completedBadgeText}>
+              {status === 'Completed' ? '✓ Completed' : status === 'Rewatching' ? '🔄 Rewatching' : status}
+            </Text>
+            {rewatchCount > 0 && (
+              <>
+                <Text style={styles.completedBadgeSep}>•</Text>
+                <Text style={styles.completedBadgeRewatch}>🔄 {rewatchCount}×</Text>
+              </>
+            )}
+            <Text style={styles.completedBadgeChevron}>›</Text>
+          </Pressable>
+        )}
+
         <View style={styles.section}>
           <View style={styles.sectionHeaderRow}>
             <Text style={styles.sectionHeader}>Story</Text>
@@ -917,6 +1057,13 @@ export default function AnimeDetailScreen() {
         <View style={styles.bottomSpacer} />
       </ScrollView>
 
+      <RewatchModal
+        visible={showRewatchModal}
+        initialCount={rewatchCount}
+        onSave={handleSaveRewatch}
+        onCancel={() => setShowRewatchModal(false)}
+      />
+
       {/* Rating Sheet Component */}
       <RatingSheet
         visible={ratingUIOpen}
@@ -944,6 +1091,39 @@ export default function AnimeDetailScreen() {
 }
 
 const styles = StyleSheet.create({
+  completedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    backgroundColor: 'rgba(52,199,89,0.12)',
+    borderWidth: 1,
+    borderColor: '#34C759',
+    borderRadius: 20,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    marginHorizontal: 16,
+    marginTop: 16,
+    marginBottom: 4,
+    gap: 8,
+  },
+  completedBadgeText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#34C759',
+  },
+  completedBadgeSep: {
+    fontSize: 12,
+    color: 'rgba(255,255,255,0.3)',
+  },
+  completedBadgeRewatch: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: 'rgba(255,255,255,0.6)',
+  },
+  completedBadgeChevron: {
+    fontSize: 18,
+    color: 'rgba(255,255,255,0.4)',
+  },
   safe: { flex: 1, backgroundColor: theme.colors.backgroundDark },
   scroll: { flex: 1 },
   content: { paddingBottom: 48 },

@@ -8,6 +8,7 @@ interface UpdateEpisodeParams {
   currentEpisode: number;
   totalEpisodes: number | null;
   userId: string;
+  currentStatus?: string;
 }
 
 export const useEpisodeUpdate = () => {
@@ -19,6 +20,7 @@ export const useEpisodeUpdate = () => {
       newEpisode,
       totalEpisodes,
       userId,
+      currentStatus,
     }: UpdateEpisodeParams) => {
       console.log('[useEpisodeUpdate] Updating to episode:', newEpisode);
 
@@ -36,16 +38,29 @@ export const useEpisodeUpdate = () => {
         updateData.status = 'Completed';
         updateData.completed_at = new Date().toISOString();
 
-        // If this is first completion, set original_completed_at
-        const { data: existing } = await supabase
-          .from('user_lists')
-          .select('original_completed_at')
-          .eq('user_id', userId)
-          .eq('anime_id', animeId)
-          .single();
-
-        if (!existing?.original_completed_at) {
-          updateData.original_completed_at = new Date().toISOString();
+        // If completing from Rewatching, increment rewatch_count
+        if (currentStatus === 'Rewatching') {
+          const { data: existing } = await supabase
+            .from('user_lists')
+            .select('rewatch_count, original_completed_at')
+            .eq('user_id', userId)
+            .eq('anime_id', animeId)
+            .single();
+          updateData.rewatch_count = ((existing?.rewatch_count ?? 0) as number) + 1;
+          if (!existing?.original_completed_at) {
+            updateData.original_completed_at = new Date().toISOString();
+          }
+        } else {
+          // First completion: set original_completed_at if missing
+          const { data: existing } = await supabase
+            .from('user_lists')
+            .select('original_completed_at')
+            .eq('user_id', userId)
+            .eq('anime_id', animeId)
+            .single();
+          if (!existing?.original_completed_at) {
+            updateData.original_completed_at = new Date().toISOString();
+          }
         }
       }
 

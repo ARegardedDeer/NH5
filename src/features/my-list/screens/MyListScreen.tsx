@@ -545,6 +545,7 @@ export const MyListScreen = () => {
           totalEpisodes={updatingItem.total_episodes}
           hasSpecials={updatingItem.anime?.has_specials || false}
           userId={userId}
+          currentStatus={updatingItem.status}
         />
       )}
 

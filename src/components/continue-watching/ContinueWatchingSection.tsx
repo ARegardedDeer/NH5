@@ -148,6 +148,7 @@ export const ContinueWatchingSection: React.FC<ContinueWatchingSectionProps> = (
           totalEpisodes={selectedAnime.total_episodes}
           hasSpecials={selectedAnime.anime.has_specials || false}
           userId={userId}
+          currentStatus={selectedAnime.status}
           onComplete={handleSeriesComplete}
         />
       )}

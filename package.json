@@ -31,6 +31,7 @@
     "@react-native-community/blur": "^4.4.1",
     "@react-native-community/slider": "^5.1.1",
     "@react-native-google-signin/google-signin": "^16.0.0",
+    "@react-native-masked-view/masked-view": "^0.3.2",
     "@react-native-picker/picker": "^2.11.4",
     "@react-navigation/bottom-tabs": "^6",
     "@react-navigation/native": "^6.1.18",

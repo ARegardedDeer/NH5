@@ -23,6 +23,7 @@ interface EpisodePickerModalProps {
   totalEpisodes: number | null;
   hasSpecials: boolean;
   userId: string;
+  currentStatus?: string;
   onComplete?: (animeId: string) => void;
 }
 
@@ -36,6 +37,7 @@ export const EpisodePickerModal: React.FC<EpisodePickerModalProps> = (props) => 
     totalEpisodes,
     hasSpecials,
     userId,
+    currentStatus,
     onComplete,
   } = props;
   const updateEpisode = useEpisodeUpdate();
@@ -113,6 +115,7 @@ export const EpisodePickerModal: React.FC<EpisodePickerModalProps> = (props) => 
         currentEpisode,
         totalEpisodes,
         userId,
+        currentStatus,
       },
       {
         onSuccess: (data) => {
