@@ -2,7 +2,6 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   ActivityIndicator,
   Alert,
-  Animated,
   Image,
   ImageBackground,
   Modal,
@@ -14,8 +13,16 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import Reanimated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withSpring,
+  withSequence,
+} from 'react-native-reanimated';
+import HapticFeedback from 'react-native-haptic-feedback';
 import RewatchModal from '../../profile/components/RewatchModal';
 import PrismaticText from '../../../components/PrismaticText';
+import { ConfettiOverlay } from '../../../components/ConfettiOverlay';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRoute } from '@react-navigation/native';
 import { AnimeDetailRouteProp } from '../../../types/navigation';
@@ -90,6 +97,13 @@ export default function AnimeDetailScreen() {
   const [savingMyRating, setSavingMyRating] = useState(false);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [ratingUIOpen, setRatingUIOpen] = useState(false);
+  const [showConfetti, setShowConfetti] = useState(false);
+
+  // Star button spring animation
+  const starScale = useSharedValue(1);
+  const starAnimatedStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: starScale.value }],
+  }));
 
   const myRatingPrevRef = useRef<number | null>(null);
   const myRatingDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -440,6 +454,13 @@ export default function AnimeDetailScreen() {
   }, [authReady, id, myRating, showToast]);
 
   const onToggleBookmark = useCallback(async () => {
+    // Spring bounce on every tap
+    starScale.value = withSequence(
+      withSpring(1.12, { damping: 12, stiffness: 220 }),
+      withSpring(1.0, { damping: 14, stiffness: 200 }),
+    );
+    HapticFeedback.trigger('impactLight');
+
     const next = !bookmarked;
     setBookmarked(next);
     setStatusMenuOpen(false);
@@ -478,6 +499,7 @@ export default function AnimeDetailScreen() {
 
   const onSelectStatus = useCallback(
     async (next: StatusOption) => {
+      const wasCompleted = status === 'Completed';
       setStatus(next);
       setStatusMenuOpen(false);
       const userId = await getCurrentUserId();
@@ -490,9 +512,13 @@ export default function AnimeDetailScreen() {
       }
       if (persisted) {
         setReloadKey((k) => k + 1);
+        if (next === 'Completed' && !wasCompleted) {
+          HapticFeedback.trigger('notificationSuccess');
+          setShowConfetti(true);
+        }
       }
     },
-    [bookmarked, id, persistUserList]
+    [bookmarked, id, persistUserList, status]
   );
 
   const handleSaveRewatch = useCallback(async (count: number) => {
@@ -751,8 +777,10 @@ export default function AnimeDetailScreen() {
                     onPress={async () => {
                       const newCount = rewatchCount + 1;
                       setRewatchCount(newCount);
-                      onSelectStatus('Completed');
                       setStatusMenuOpen(false);
+                      HapticFeedback.trigger('notificationSuccess');
+                      setShowConfetti(true);
+                      onSelectStatus('Completed');
                       const userId = await getCurrentUserId();
                       if (!userId) return;
                       await supabase
@@ -847,17 +875,19 @@ export default function AnimeDetailScreen() {
                     <ActivityIndicator size="small" color="#A78BFA" />
                   </View>
                 ) : (
-                  <Pressable
-                    onPress={onToggleBookmark}
-                    hitSlop={HIT_SLOP}
-                    style={({ pressed }) => [
-                      styles.iconButton,
-                      bookmarked && styles.iconButtonActive,
-                      pressed && styles.iconButtonPressed,
-                    ]}
-                  >
-                    <Text style={styles.iconButtonText}>{bookmarkIcon}</Text>
-                  </Pressable>
+                  <Reanimated.View style={starAnimatedStyle}>
+                    <Pressable
+                      onPress={onToggleBookmark}
+                      hitSlop={HIT_SLOP}
+                      style={({ pressed }) => [
+                        styles.iconButton,
+                        bookmarked && styles.iconButtonActive,
+                        pressed && styles.iconButtonPressed,
+                      ]}
+                    >
+                      <Text style={styles.iconButtonText}>{bookmarkIcon}</Text>
+                    </Pressable>
+                  </Reanimated.View>
                 )}
               </View>
               <View style={styles.heroBottom}>
@@ -903,17 +933,19 @@ export default function AnimeDetailScreen() {
                     <ActivityIndicator size="small" color="#A78BFA" />
                   </View>
                 ) : (
-                  <Pressable
-                    onPress={onToggleBookmark}
-                    hitSlop={HIT_SLOP}
-                    style={({ pressed }) => [
-                      styles.iconButton,
-                      bookmarked && styles.iconButtonActive,
-                      pressed && styles.iconButtonPressed,
-                    ]}
-                  >
-                    <Text style={styles.iconButtonText}>{bookmarkIcon}</Text>
-                  </Pressable>
+                  <Reanimated.View style={starAnimatedStyle}>
+                    <Pressable
+                      onPress={onToggleBookmark}
+                      hitSlop={HIT_SLOP}
+                      style={({ pressed }) => [
+                        styles.iconButton,
+                        bookmarked && styles.iconButtonActive,
+                        pressed && styles.iconButtonPressed,
+                      ]}
+                    >
+                      <Text style={styles.iconButtonText}>{bookmarkIcon}</Text>
+                    </Pressable>
+                  </Reanimated.View>
                 )}
               </View>
               <View style={styles.heroBottom}>
@@ -1063,6 +1095,8 @@ export default function AnimeDetailScreen() {
         onSave={handleSaveRewatch}
         onCancel={() => setShowRewatchModal(false)}
       />
+
+      <ConfettiOverlay visible={showConfetti} onComplete={() => setShowConfetti(false)} />
 
       {/* Rating Sheet Component */}
       <RatingSheet

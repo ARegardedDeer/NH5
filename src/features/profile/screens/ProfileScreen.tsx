@@ -1,6 +1,6 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { ScrollView, View, Text, RefreshControl, StyleSheet } from "react-native";
+import { ScrollView, View, Text, RefreshControl, StyleSheet, NativeScrollEvent, NativeSyntheticEvent } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import { AppNavigationProp } from "../../../types/navigation";
 import { navigateToAnimeDetail } from "../../../utils/navigationHelpers";
@@ -22,6 +22,26 @@ export default function ProfileScreen() {
   const navigation = useNavigation<AppNavigationProp>();
   const { data, isLoading, refetch, error } = useProfileData();
   const { data: profileStats } = useProfileStats();
+  const xpBarRef = useRef<View>(null);
+  const scrollViewRef = useRef<ScrollView>(null);
+  const [xpBarShouldAnimate, setXpBarShouldAnimate] = useState(false);
+  const xpBarTriggeredRef = useRef(false);
+
+  const checkXpBarVisibility = (scrollY: number, viewportHeight: number) => {
+    if (xpBarTriggeredRef.current || !xpBarRef.current) return;
+    xpBarRef.current.measure((_x, _y, _w, h, _px, py) => {
+      // py is position relative to the screen; trigger when top half enters viewport
+      if (py < viewportHeight && py + h > 0) {
+        xpBarTriggeredRef.current = true;
+        setXpBarShouldAnimate(true);
+      }
+    });
+  };
+
+  const handleScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const { contentOffset, layoutMeasurement } = e.nativeEvent;
+    checkXpBarVisibility(contentOffset.y, layoutMeasurement.height);
+  };
 
   useEffect(() => {
     if (__DEV__) {
@@ -41,9 +61,12 @@ export default function ProfileScreen() {
   return (
     <SafeAreaView edges={["top"]} style={styles.root}>
       <ScrollView
+        ref={scrollViewRef}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
+        scrollEventThrottle={100}
+        onScroll={handleScroll}
         refreshControl={
           <RefreshControl tintColor={C.text} refreshing={isLoading} onRefresh={onRefresh} />
         }
@@ -80,10 +103,11 @@ export default function ProfileScreen() {
         />
 
         {profileStats && (
-          <View style={styles.section}>
+          <View ref={xpBarRef} style={styles.section}>
             <XpProgressBar
               xpCurrent={profileStats.xpCurrent}
               xpToNext={profileStats.xpToNext}
+              shouldAnimate={xpBarShouldAnimate}
             />
           </View>
         )}

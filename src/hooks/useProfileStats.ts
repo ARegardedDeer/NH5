@@ -105,7 +105,8 @@ async function fetchProfileStats(userId: string): Promise<ProfileStats> {
   }
 
   // XP: 10 per rating, level every 500 XP
-  const xpCurrent = ratingRows.length * XP_PER_RATING;
+  // DEV: 10× multiplier so small rating counts produce a visible bar fill
+  const xpCurrent = ratingRows.length * XP_PER_RATING * (__DEV__ ? 10 : 1);
   const xpToNext = XP_PER_LEVEL - (xpCurrent % XP_PER_LEVEL);
 
   const genreBreakdown: GenreStat[] = Array.from(tally.entries())
