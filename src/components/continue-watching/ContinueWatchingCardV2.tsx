@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Text, Pressable, Image, StyleSheet, ActionSheetIOS, Platform } from 'react-native';
-import Animated, { useAnimatedStyle, useSharedValue, withTiming, runOnJS } from 'react-native-reanimated';
+import Animated, { useAnimatedStyle, useSharedValue, withTiming, withSpring, runOnJS } from 'react-native-reanimated';
 import { useNavigation } from '@react-navigation/native';
 import LinearGradient from 'react-native-linear-gradient';
 import HapticFeedback from 'react-native-haptic-feedback';
@@ -43,6 +43,16 @@ export const ContinueWatchingCardV2: React.FC<ContinueWatchingCardV2Props> = ({
     transform: [{ scale: scale.value }],
   }));
 
+  const handlePressIn = () => {
+    if (isCompleted) return;
+    scale.value = withSpring(0.94, { damping: 15, stiffness: 300 });
+  };
+
+  const handlePressOut = () => {
+    if (isCompleted) return;
+    scale.value = withSpring(1.0, { damping: 12, stiffness: 250 });
+  };
+
   const handlePress = () => {
     if (isCompleted) return;
     HapticFeedback.trigger('impactLight');
@@ -79,11 +89,10 @@ export const ContinueWatchingCardV2: React.FC<ContinueWatchingCardV2Props> = ({
   return (
     <Animated.View style={animatedStyle}>
       <Pressable
-        style={({ pressed }) => [
-          styles.card,
-          pressed && !isCompleted && { opacity: 0.85, transform: [{ scale: 0.98 }] },
-        ]}
+        style={styles.card}
         onPress={handlePress}
+        onPressIn={handlePressIn}
+        onPressOut={handlePressOut}
         onLongPress={handleLongPress}
         disabled={isCompleted}
         accessibilityLabel={`${displayTitle}, episode ${currentEpisode}`}
@@ -111,7 +120,7 @@ export const ContinueWatchingCardV2: React.FC<ContinueWatchingCardV2Props> = ({
             {displayTitle}
           </Text>
           <Text style={styles.episode}>
-            Ep {currentEpisode}
+            Ep {currentEpisode + 1}
           </Text>
         </LinearGradient>
       </Pressable>

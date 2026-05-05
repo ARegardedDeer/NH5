@@ -18,13 +18,15 @@ import Reanimated, {
   useAnimatedStyle,
   withSpring,
   withSequence,
+  FadeInDown,
+  Easing,
 } from 'react-native-reanimated';
 import HapticFeedback from 'react-native-haptic-feedback';
 import RewatchModal from '../../profile/components/RewatchModal';
 import PrismaticText from '../../../components/PrismaticText';
 import { ConfettiOverlay } from '../../../components/ConfettiOverlay';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRoute } from '@react-navigation/native';
+import { useNavigation, useRoute } from '@react-navigation/native';
 import { AnimeDetailRouteProp } from '../../../types/navigation';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAnimeById } from '../hooks/useAnimeById';
@@ -34,11 +36,23 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { RatingBadge, RatingSheet } from '../../../components/rating';
 import { readUserRating, upsertUserRating, deleteUserRating, setElevenFlag, normalizeScore } from '../../rating/persistence';
 import { useToast } from '../../../contexts/ToastContext';
+import { EpisodeWidget } from '../../../components/EpisodeWidget';
 
 const DEV = __DEV__;
 const DEV_VERBOSE = __DEV__ && false; // flip to true for deep debugging
 const HIT_SLOP = { top: 8, right: 8, bottom: 8, left: 8 };
 const STATUSES = ['Watching', 'Rewatching', 'Plan to Watch', 'On Hold', 'Completed', 'Dropped'] as const;
+
+// Valid status transitions — "Completed is the floor" rule.
+// Rewatching is conditionally added for non-Completed/Rewatching statuses when rewatch_count > 0.
+const STATUS_TRANSITIONS: Record<string, readonly string[]> = {
+  'Plan to Watch': ['Watching', 'On Hold', 'Dropped'],
+  'Watching':      ['Plan to Watch', 'On Hold', 'Completed', 'Dropped'],
+  'On Hold':       ['Plan to Watch', 'Watching', 'Completed', 'Dropped'],
+  'Completed':     ['Watching', 'On Hold', 'Rewatching'],
+  'Rewatching':    ['On Hold', 'Completed'],
+  'Dropped':       ['Plan to Watch', 'Watching', 'On Hold', 'Completed'],
+};
 
 // Haptic feedback helper (best-effort)
 const haptic = (type: 'light' | 'medium' | 'heavy') => {
@@ -74,6 +88,7 @@ async function getCurrentUserId(): Promise<string | null> {
 }
 
 export default function AnimeDetailScreen() {
+  const navigation = useNavigation();
   const route = useRoute<AnimeDetailRouteProp>();
   const { animeId, title } = route.params;
   const id = animeId;
@@ -82,12 +97,12 @@ export default function AnimeDetailScreen() {
   const { showToast } = useToast();
   const queryClient = useQueryClient();
 
-  const [bookmarked, setBookmarked] = useState(false);
   const [status, setStatus] = useState<StatusOption | null>(null);
   const [rewatchCount, setRewatchCount] = useState(0);
+  const [currentEpisode, setCurrentEpisode] = useState(0);
+  const [totalEpisodes, setTotalEpisodes] = useState<number | null>(null);
   const [showRewatchModal, setShowRewatchModal] = useState(false);
   const [statusMenuOpen, setStatusMenuOpen] = useState(false);
-  const [showFullStatusPicker, setShowFullStatusPicker] = useState(false);
   const [isStoryExpanded, setIsStoryExpanded] = useState(false);
   const [authReady, setAuthReady] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
@@ -99,10 +114,10 @@ export default function AnimeDetailScreen() {
   const [ratingUIOpen, setRatingUIOpen] = useState(false);
   const [showConfetti, setShowConfetti] = useState(false);
 
-  // Star button spring animation
-  const starScale = useSharedValue(1);
-  const starAnimatedStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: starScale.value }],
+  // Unified status button spring animation
+  const btnScale = useSharedValue(1);
+  const btnAnimatedStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: btnScale.value }],
   }));
 
   const myRatingPrevRef = useRef<number | null>(null);
@@ -143,10 +158,9 @@ export default function AnimeDetailScreen() {
     AsyncStorage.getItem(getUserListCacheKey(id))
       .then(cached => {
         if (cached) {
-          const { bookmarked, status } = JSON.parse(cached);
-          setBookmarked(!!bookmarked);
+          const { status } = JSON.parse(cached);
           setStatus(status ?? null);
-          if (DEV_VERBOSE) console.log('[anime] cache hit:', { bookmarked, status });
+          if (DEV_VERBOSE) console.log('[anime] cache hit:', { status });
         }
       })
       .catch(() => {});
@@ -164,7 +178,7 @@ export default function AnimeDetailScreen() {
 
     const { data: rows, error } = await supabase
       .from('user_lists')
-      .select('status,bookmarked,rewatch_count')
+      .select('status,bookmarked,rewatch_count,current_episode,total_episodes')
       .eq('user_id', currentUserId)
       .eq('anime_id', id)
       .limit(1);
@@ -180,20 +194,21 @@ export default function AnimeDetailScreen() {
     }
 
     if (rows && rows[0]) {
-      setBookmarked(!!rows[0].bookmarked);
       setStatus(rows[0].status ?? null);
       setRewatchCount(rows[0].rewatch_count ?? 0);
+      setCurrentEpisode(rows[0].current_episode ?? 0);
+      setTotalEpisodes(rows[0].total_episodes ?? null);
       setHasLoadedOnce(true);
       // Write cache for next time
       AsyncStorage.setItem(getUserListCacheKey(id), JSON.stringify({
-        bookmarked: !!rows[0].bookmarked,
         status: rows[0].status ?? null,
       })).catch(() => {});
     } else {
       // no row: reflect defaults
-      setBookmarked(false);
       setStatus(null);
       setRewatchCount(0);
+      setCurrentEpisode(0);
+      setTotalEpisodes(null);
       setHasLoadedOnce(true);
     }
   }, [authReady, id]);
@@ -253,7 +268,8 @@ export default function AnimeDetailScreen() {
 
   // keep exclusivity in UI
 
-  const commitMyRating = useCallback(async (next: number) => {
+  const commitMyRating = useCallback(async (next: number | null) => {
+    if (next === null) return;
     if (!authReady || !id) return;
     const { data: got } = await supabase.auth.getUser();
     const uid = got?.user?.id;
@@ -453,61 +469,71 @@ export default function AnimeDetailScreen() {
     setReloadKey(k => k + 1);
   }, [authReady, id, myRating, showToast]);
 
-  const onToggleBookmark = useCallback(async () => {
-    // Spring bounce on every tap
-    starScale.value = withSequence(
-      withSpring(1.12, { damping: 12, stiffness: 220 }),
+  const handleQuickAdd = useCallback(async () => {
+    btnScale.value = withSequence(
+      withSpring(1.08, { damping: 12, stiffness: 220 }),
       withSpring(1.0, { damping: 14, stiffness: 200 }),
     );
-    HapticFeedback.trigger('impactLight');
-
-    const next = !bookmarked;
-    setBookmarked(next);
-    setStatusMenuOpen(false);
-    const userId = await getCurrentUserId();
-    const persisted = await persistUserList({ userId, animeId: id, bookmarked: next, status });
+    HapticFeedback.trigger('impactMedium');
+    setStatus('Plan to Watch');
+    setTimeout(() => setStatusMenuOpen(true), 120);
+    const persisted = await persistUserList({ userId: currentUserId, animeId: id, bookmarked: false, status: 'Plan to Watch' });
     if (!persisted) {
-      // Rollback optimistic update on failure
-      setBookmarked(!next);
+      setStatus(null);
     }
-  }, [bookmarked, id, persistUserList, status]);
+  }, [currentUserId, id, persistUserList]);
 
   const onToggleStatusMenu = useCallback(() => {
-    setStatusMenuOpen((prev) => {
-      if (prev) setShowFullStatusPicker(false);
-      return !prev;
-    });
+    HapticFeedback.trigger('impactLight');
+    btnScale.value = withSequence(
+      withSpring(1.06, { damping: 12, stiffness: 220 }),
+      withSpring(1.0, { damping: 14, stiffness: 200 }),
+    );
+    setStatusMenuOpen((prev) => !prev);
   }, []);
 
   const handleRemoveFromList = useCallback(async () => {
     setStatusMenuOpen(false);
-    const userId = await getCurrentUserId();
-    if (!userId) return;
+    if (!currentUserId) return;
     const { error } = await supabase
       .from('user_lists')
       .delete()
-      .eq('user_id', userId)
+      .eq('user_id', currentUserId)
       .eq('anime_id', id);
     if (!error) {
       setStatus(null);
-      setBookmarked(false);
       setRewatchCount(0);
     } else if (DEV) {
       console.warn('[anime] remove error:', error.message);
     }
-  }, [id]);
+  }, [currentUserId, id]);
 
   const onSelectStatus = useCallback(
     async (next: StatusOption) => {
       const wasCompleted = status === 'Completed';
+      const wasRewatching = status === 'Rewatching';
       setStatus(next);
       setStatusMenuOpen(false);
-      const userId = await getCurrentUserId();
-      const persisted = await persistUserList({ userId, animeId: id, bookmarked, status: next });
+
+      // Rewatching → Completed: increment rewatch_count
+      if (wasRewatching && next === 'Completed') {
+        const newCount = rewatchCount + 1;
+        setRewatchCount(newCount);
+        if (currentUserId) {
+          await supabase
+            .from('user_lists')
+            .update({ rewatch_count: newCount })
+            .eq('user_id', currentUserId)
+            .eq('anime_id', id);
+          queryClient.invalidateQueries({ queryKey: ['profile-stats'] });
+        }
+      }
+
+      const persisted = await persistUserList({ userId: currentUserId, animeId: id, bookmarked: false, status: next });
       if (DEV) {
         console.log(`[anime] status: set=${next}`);
         console.log(
-          `[anime] lists: user=${userId ?? 'none'} anime=${id} op=status status=${next} persisted=${persisted}`
+          `[anime] lists: user=${currentUserId ?? 'none'} anime=${id} op=status status=${next} persisted=${persisted}`
         );
       }
       if (persisted) {
@@ -518,30 +544,42 @@ export default function AnimeDetailScreen() {
         }
       }
     },
-    [bookmarked, id, persistUserList, status]
+    [currentUserId, id, persistUserList, queryClient, rewatchCount, status]
   );
 
   const handleSaveRewatch = useCallback(async (count: number) => {
     setRewatchCount(count);
     setShowRewatchModal(false);
-    const userId = await getCurrentUserId();
-    if (!userId) return;
+    if (!currentUserId) return;
     const { error } = await supabase
       .from('user_lists')
       .update({ rewatch_count: count })
-      .eq('user_id', userId)
+      .eq('user_id', currentUserId)
       .eq('anime_id', id);
     if (error) {
       if (DEV) console.warn('[anime] rewatch update error:', error.message);
     } else {
       queryClient.invalidateQueries({ queryKey: ['profile-stats'] });
     }
-  }, [id, queryClient]);
+  }, [currentUserId, id, queryClient]);
 
   const onCompletedBadgePress = useCallback(() => {
     haptic('medium');
     setShowRewatchModal(true);
   }, []);
+
+  // Called by EpisodeWidget when episode reaches totalEpisodes
+  const handleEpisodeComplete = useCallback(() => {
+    const wasRewatching = status === 'Rewatching';
+    setStatus('Completed');
+    if (wasRewatching) {
+      const newCount = rewatchCount + 1;
+      setRewatchCount(newCount);
+    }
+    HapticFeedback.trigger('notificationSuccess');
+    setShowConfetti(true);
+    setReloadKey((k) => k + 1);
+  }, [rewatchCount, status]);
 
   const synopsis = typeof data?.synopsis === 'string' ? data.synopsis.trim() : '';
   const storyText = synopsis.length > 0 ? synopsis : 'Synopsis coming soon.';
@@ -704,131 +742,142 @@ export default function AnimeDetailScreen() {
   }, [data?.voice_actors]);
 
   const heroSource = data?.thumbnail_url ? { uri: data.thumbnail_url } : null;
-  const bookmarkIcon = bookmarked ? '★' : '☆';
-  // isRewatching is only used for badge visibility; button always shows actual status
-  const isRewatching = status === 'Rewatching' || (status === 'Completed' && rewatchCount > 0);
-  const statusButtonLabel = status ?? 'Add to List';
 
+  const STATUS_ICONS: Record<string, string> = {
+    'Plan to Watch': '📚',
+    'Watching': '▶',
+    'On Hold': '⏸',
+    'Completed': '✓',
+    'Rewatching': '🔄',
+    'Dropped': '✕',
+  };
+
+  const badgeText = (count: number) => (
+    <Text style={{ fontSize: 12, fontWeight: '700', color: 'rgba(201,196,255,0.9)' }}>🎖 {count}×</Text>
+  );
+
+  const chevron = <Text style={{ color: 'rgba(255,255,255,0.55)', fontSize: 11 }}>▼</Text>;
+
+  const renderUnifiedButtonLabel = () => {
+    if (!status) {
+      return <Text style={{ color: '#fff', fontSize: 13, fontWeight: '600' }}>+ Add to List</Text>;
+    }
+
+    // Rewatching: always show prismatic "Rewatching" text + optional badge (display only)
+    if (status === 'Rewatching') {
+      return (
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+          <PrismaticText style={{ fontSize: 13, fontWeight: '600' }}>Rewatching</PrismaticText>
+          {rewatchCount > 0 && badgeText(rewatchCount)}
+          {chevron}
+        </View>
+      );
+    }
+
+    // All other statuses: icon + text + optional badge (display only) + ▼
+    const icon = STATUS_ICONS[status] ?? '';
+    return (
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+        <Text style={{ color: '#fff', fontSize: 13, fontWeight: '600' }}>{icon} {status}</Text>
+        {rewatchCount > 0 && status === 'Completed' && badgeText(rewatchCount)}
+        {chevron}
+      </View>
+    );
+  };
 
   const statusControls = !authReady ? (
-    <View style={{ width: 100, height: 36, borderRadius: 18, backgroundColor: 'rgba(0,0,0,0.55)', alignItems: 'center', justifyContent: 'center', marginRight: 12 }}>
+    <View style={{ width: 100, height: 36, borderRadius: 18, backgroundColor: 'rgba(0,0,0,0.55)', alignItems: 'center', justifyContent: 'center' }}>
       <ActivityIndicator size="small" color="#A78BFA" />
     </View>
   ) : (
-    <View style={{ position: 'relative', marginRight: 12 }}>
-      <Pressable
-        onPress={onToggleStatusMenu}
-        hitSlop={HIT_SLOP}
-        style={({ pressed }) => [
-          { borderRadius: 18, paddingHorizontal: 14, paddingVertical: 8, backgroundColor: 'rgba(0,0,0,0.55)', borderWidth: 1, borderColor: status === 'Rewatching' ? 'rgba(167,139,250,0.6)' : 'rgba(255,255,255,0.24)' },
-          pressed && { opacity: 0.85 },
-        ]}
-      >
-        {status === 'Rewatching' ? (
-          <PrismaticText>{statusButtonLabel}</PrismaticText>
-        ) : (
-          <Text style={{ color: '#fff', fontSize: 13, fontWeight: '600' }}>{statusButtonLabel}</Text>
-        )}
-      </Pressable>
+    <View style={{ position: 'relative' }}>
+      <Reanimated.View style={btnAnimatedStyle}>
+        <Pressable
+          onPress={status ? onToggleStatusMenu : handleQuickAdd}
+          hitSlop={HIT_SLOP}
+          style={({ pressed }) => [
+            {
+              borderRadius: 18,
+              borderBottomLeftRadius: statusMenuOpen ? 0 : 18,
+              borderBottomRightRadius: statusMenuOpen ? 0 : 18,
+              paddingHorizontal: 14,
+              paddingVertical: 8,
+              backgroundColor: statusMenuOpen ? 'rgba(12,11,23,0.97)' : 'rgba(0,0,0,0.55)',
+              borderWidth: 1,
+              borderBottomWidth: statusMenuOpen ? 0 : 1,
+              borderColor: status === 'Rewatching' ? 'rgba(167,139,250,0.6)' : statusMenuOpen ? 'rgba(167,139,250,0.45)' : 'rgba(255,255,255,0.24)',
+            },
+            pressed && { opacity: 0.85 },
+          ]}
+        >
+          {renderUnifiedButtonLabel()}
+        </Pressable>
+      </Reanimated.View>
       {statusMenuOpen ? (
-        <View
+        <Reanimated.View
+          entering={FadeInDown.duration(160).easing(Easing.out(Easing.quad))}
           style={{
             position: 'absolute',
-            top: 44,
-            left: 0,
-            backgroundColor: 'rgba(12,11,23,0.92)',
+            top: 36,
+            right: 0,
+            backgroundColor: 'rgba(12,11,23,0.97)',
             borderRadius: 12,
+            borderTopLeftRadius: 0,
+            borderTopRightRadius: 0,
             borderWidth: 1,
+            borderTopWidth: 0,
             borderColor: 'rgba(167,139,250,0.45)',
             paddingVertical: 4,
-            zIndex: 5,
-            minWidth: 160,
+            zIndex: 20,
+            minWidth: 190,
             shadowColor: '#000',
-            shadowOpacity: 0.3,
-            shadowRadius: 8,
+            shadowOpacity: 0.4,
+            shadowRadius: 12,
             shadowOffset: { width: 0, height: 4 },
-            elevation: 6,
+            elevation: 8,
           }}
         >
-          {(status === 'Completed' || status === 'Rewatching') && !showFullStatusPicker ? (
+          {STATUSES.filter((option) => {
+            const allowed = STATUS_TRANSITIONS[status ?? ''] ?? [];
+            if (!allowed.includes(option)) return false;
+            // Rewatching requires prior completion for non-Completed/Rewatching statuses
+            if (option === 'Rewatching' && status !== 'Completed' && status !== 'Rewatching' && rewatchCount === 0) return false;
+            return true;
+          }).map((option) => (
+            <Pressable
+              key={option}
+              onPress={() => { onSelectStatus(option); setStatusMenuOpen(false); }}
+              style={({ pressed }) => [
+                { paddingVertical: 10, paddingHorizontal: 14 },
+                pressed && { backgroundColor: 'rgba(167,139,250,0.18)' },
+              ]}
+            >
+              {option === 'Rewatching' ? (
+                <PrismaticText style={{ fontSize: 13, fontWeight: '600' }}>{option}</PrismaticText>
+              ) : (
+                <Text style={{ color: '#fff', fontSize: 13, fontWeight: '600' }}>{STATUS_ICONS[option]} {option}</Text>
+              )}
+            </Pressable>
+          ))}
+          {rewatchCount > 0 && (
             <>
+              <View style={{ height: 1, backgroundColor: 'rgba(167,139,250,0.2)', marginVertical: 4 }} />
               <Pressable
                 onPress={() => { setStatusMenuOpen(false); setShowRewatchModal(true); }}
                 style={({ pressed }) => [{ paddingVertical: 10, paddingHorizontal: 14 }, pressed && { backgroundColor: 'rgba(167,139,250,0.18)' }]}
               >
-                <Text style={{ color: '#fff', fontSize: 13, fontWeight: '600' }}>Edit Rewatch Count</Text>
-              </Pressable>
-              {status === 'Completed' ? (
-                <Pressable
-                  onPress={() => { onSelectStatus('Rewatching'); }}
-                  style={({ pressed }) => [{ paddingVertical: 10, paddingHorizontal: 14 }, pressed && { backgroundColor: 'rgba(167,139,250,0.18)' }]}
-                >
-                  <PrismaticText>Watch Again</PrismaticText>
-                </Pressable>
-              ) : (
-                <>
-                  <Pressable
-                    onPress={() => { onSelectStatus('On Hold'); setStatusMenuOpen(false); }}
-                    style={({ pressed }) => [{ paddingVertical: 10, paddingHorizontal: 14 }, pressed && { backgroundColor: 'rgba(167,139,250,0.18)' }]}
-                  >
-                    <Text style={{ color: '#fff', fontSize: 13, fontWeight: '600' }}>Put On Hold</Text>
-                  </Pressable>
-                  <Pressable
-                    onPress={async () => {
-                      const newCount = rewatchCount + 1;
-                      setRewatchCount(newCount);
-                      setStatusMenuOpen(false);
-                      HapticFeedback.trigger('notificationSuccess');
-                      setShowConfetti(true);
-                      onSelectStatus('Completed');
-                      const userId = await getCurrentUserId();
-                      if (!userId) return;
-                      await supabase
-                        .from('user_lists')
-                        .update({ rewatch_count: newCount })
-                        .eq('user_id', userId)
-                        .eq('anime_id', id);
-                      queryClient.invalidateQueries({ queryKey: ['profile-stats'] });
-                    }}
-                    style={({ pressed }) => [{ paddingVertical: 10, paddingHorizontal: 14 }, pressed && { backgroundColor: 'rgba(167,139,250,0.18)' }]}
-                  >
-                    <Text style={{ color: '#34C759', fontSize: 13, fontWeight: '600' }}>Mark Completed</Text>
-                  </Pressable>
-                </>
-              )}
-              <Pressable
-                onPress={() => setShowFullStatusPicker(true)}
-                style={({ pressed }) => [{ paddingVertical: 10, paddingHorizontal: 14 }, pressed && { backgroundColor: 'rgba(167,139,250,0.18)' }]}
-              >
-                <Text style={{ color: '#fff', fontSize: 13, fontWeight: '600' }}>Change Status</Text>
-              </Pressable>
-              <Pressable
-                onPress={handleRemoveFromList}
-                style={({ pressed }) => [{ paddingVertical: 10, paddingHorizontal: 14 }, pressed && { backgroundColor: 'rgba(167,139,250,0.18)' }]}
-              >
-                <Text style={{ color: '#FF6B6B', fontSize: 13, fontWeight: '600' }}>Remove from List</Text>
+                <Text style={{ color: '#fff', fontSize: 13, fontWeight: '600' }}>🎖 Edit Rewatch Count</Text>
               </Pressable>
             </>
-          ) : (
-            STATUSES.map((option) => (
-              <Pressable
-                key={option}
-                onPress={() => { onSelectStatus(option); setStatusMenuOpen(false); setShowFullStatusPicker(false); }}
-                style={({ pressed }) => [
-                  { paddingVertical: 10, paddingHorizontal: 14 },
-                  pressed && { backgroundColor: 'rgba(167,139,250,0.18)' },
-                  option === status && { backgroundColor: 'rgba(167,139,250,0.1)' },
-                ]}
-              >
-                {option === 'Rewatching' ? (
-                  <PrismaticText>{option}</PrismaticText>
-                ) : (
-                  <Text style={{ color: option === status ? '#C9C4FF' : '#fff', fontSize: 13, fontWeight: '600' }}>{option}</Text>
-                )}
-              </Pressable>
-            ))
           )}
-        </View>
+          <View style={{ height: 1, backgroundColor: 'rgba(167,139,250,0.2)', marginVertical: 4 }} />
+          <Pressable
+            onPress={() => { setStatusMenuOpen(false); handleRemoveFromList(); }}
+            style={({ pressed }) => [{ paddingVertical: 10, paddingHorizontal: 14 }, pressed && { backgroundColor: 'rgba(167,139,250,0.18)' }]}
+          >
+            <Text style={{ color: '#FF6B6B', fontSize: 13, fontWeight: '600' }}>Remove from List</Text>
+          </Pressable>
+        </Reanimated.View>
       ) : null}
     </View>
   );
@@ -868,27 +917,15 @@ export default function AnimeDetailScreen() {
               <View style={styles.heroOverlay} />
               <View style={styles.heroBottomFade} />
               <View style={styles.heroBottomOverlay} />
+              <Pressable
+                onPress={() => navigation.goBack()}
+                hitSlop={HIT_SLOP}
+                style={styles.backButton}
+              >
+                <Text style={styles.backButtonIcon}>✕</Text>
+              </Pressable>
               <View style={styles.heroTopBar}>
                 {statusControls}
-                {!authReady ? (
-                  <View style={[styles.iconButton, { alignItems: 'center', justifyContent: 'center' }]}>
-                    <ActivityIndicator size="small" color="#A78BFA" />
-                  </View>
-                ) : (
-                  <Reanimated.View style={starAnimatedStyle}>
-                    <Pressable
-                      onPress={onToggleBookmark}
-                      hitSlop={HIT_SLOP}
-                      style={({ pressed }) => [
-                        styles.iconButton,
-                        bookmarked && styles.iconButtonActive,
-                        pressed && styles.iconButtonPressed,
-                      ]}
-                    >
-                      <Text style={styles.iconButtonText}>{bookmarkIcon}</Text>
-                    </Pressable>
-                  </Reanimated.View>
-                )}
               </View>
               <View style={styles.heroBottom}>
                 <View style={styles.titleShield}>
@@ -926,27 +963,15 @@ export default function AnimeDetailScreen() {
               <View style={styles.heroOverlay} />
               <View style={styles.heroBottomFade} />
               <View style={styles.heroBottomOverlay} />
+              <Pressable
+                onPress={() => navigation.goBack()}
+                hitSlop={HIT_SLOP}
+                style={styles.backButton}
+              >
+                <Text style={styles.backButtonIcon}>✕</Text>
+              </Pressable>
               <View style={styles.heroTopBar}>
                 {statusControls}
-                {!authReady ? (
-                  <View style={[styles.iconButton, { alignItems: 'center', justifyContent: 'center' }]}>
-                    <ActivityIndicator size="small" color="#A78BFA" />
-                  </View>
-                ) : (
-                  <Reanimated.View style={starAnimatedStyle}>
-                    <Pressable
-                      onPress={onToggleBookmark}
-                      hitSlop={HIT_SLOP}
-                      style={({ pressed }) => [
-                        styles.iconButton,
-                        bookmarked && styles.iconButtonActive,
-                        pressed && styles.iconButtonPressed,
-                      ]}
-                    >
-                      <Text style={styles.iconButtonText}>{bookmarkIcon}</Text>
-                    </Pressable>
-                  </Reanimated.View>
-                )}
               </View>
               <View style={styles.heroBottom}>
                 <View style={styles.titleShield}>
@@ -988,20 +1013,22 @@ export default function AnimeDetailScreen() {
           onPress={() => setRatingUIOpen(true)}
         />
 
-        {status && (status === 'Completed' || status === 'Rewatching' || rewatchCount > 0) && (
+        <EpisodeWidget
+          animeId={id}
+          currentEpisode={currentEpisode}
+          totalEpisodes={totalEpisodes}
+          status={status}
+          userId={currentUserId}
+          onComplete={handleEpisodeComplete}
+          onEpisodeChange={setCurrentEpisode}
+        />
+
+        {rewatchCount > 0 && (
           <Pressable
             onPress={onCompletedBadgePress}
             style={({ pressed }) => [styles.completedBadge, pressed && { opacity: 0.7 }]}
           >
-            <Text style={styles.completedBadgeText}>
-              {status === 'Completed' ? '✓ Completed' : status === 'Rewatching' ? '🔄 Rewatching' : status}
-            </Text>
-            {rewatchCount > 0 && (
-              <>
-                <Text style={styles.completedBadgeSep}>•</Text>
-                <Text style={styles.completedBadgeRewatch}>🔄 {rewatchCount}×</Text>
-              </>
-            )}
+            <Text style={styles.completedBadgeText}>🎖 {rewatchCount}×</Text>
             <Text style={styles.completedBadgeChevron}>›</Text>
           </Pressable>
         )}
@@ -1129,9 +1156,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     alignSelf: 'flex-start',
-    backgroundColor: 'rgba(52,199,89,0.12)',
+    backgroundColor: 'rgba(201,196,255,0.1)',
     borderWidth: 1,
-    borderColor: '#34C759',
+    borderColor: 'rgba(201,196,255,0.35)',
     borderRadius: 20,
     paddingHorizontal: 16,
     paddingVertical: 8,
@@ -1142,17 +1169,8 @@ const styles = StyleSheet.create({
   },
   completedBadgeText: {
     fontSize: 15,
-    fontWeight: '600',
-    color: '#34C759',
-  },
-  completedBadgeSep: {
-    fontSize: 12,
-    color: 'rgba(255,255,255,0.3)',
-  },
-  completedBadgeRewatch: {
-    fontSize: 13,
-    fontWeight: '500',
-    color: 'rgba(255,255,255,0.6)',
+    fontWeight: '700',
+    color: 'rgba(201,196,255,0.9)',
   },
   completedBadgeChevron: {
     fontSize: 18,
@@ -1172,7 +1190,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 20,
     position: 'relative',
-    overflow: 'hidden',
     borderBottomLeftRadius: 24,
     borderBottomRightRadius: 24,
   },
@@ -1201,7 +1218,25 @@ const styles = StyleSheet.create({
     height: 140,
     backgroundColor: 'rgba(0,0,0,0.55)',
   },
-  heroTopBar: { flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'flex-start' },
+  heroTopBar: { flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'flex-start', zIndex: 10 },
+  backButton: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 10,
+  },
+  backButtonIcon: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '600',
+    lineHeight: 18,
+  },
   iconButton: {
     width: 40,
     height: 40,

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, ScrollView, StyleSheet, FlatList, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import Animated, { FadeIn, FadeOut, Layout } from 'react-native-reanimated';
+import Animated, { FadeInDown, Easing } from 'react-native-reanimated';
 import { useNavigation } from '@react-navigation/native';
 import BottomSheet from '@gorhom/bottom-sheet';
 import { supabase, whenAuthed } from '../../../db/supabaseClient';
@@ -229,23 +229,29 @@ export const MyListScreen = () => {
     return (
       <FlatList
         data={items}
-        renderItem={({ item }) => (
-          <MyListSwipeRow
-            status={item.status}
-            currentEpisode={item.current_episode}
-            lastWatchedAt={item.last_watched_at}
-            completedAt={item.completed_at}
-            originalCompletedAt={item.original_completed_at}
-            startedAt={item.started_at}
-            tab="backlog"
-            onCommit={(payload) => handleStatusChange(item as ActiveItem, payload)}
+        renderItem={({ item, index }) => (
+          <Animated.View
+            entering={index < 8
+              ? FadeInDown.delay(index * 45).duration(220).easing(Easing.bezier(0.25, 0.1, 0.25, 1))
+              : undefined}
           >
-            <ListRow
-              anime={item.anime}
-              subtitle={item.status}
-              onMenuPress={() => handleInfo(item.anime_id, item.anime?.title)}
-            />
-          </MyListSwipeRow>
+            <MyListSwipeRow
+              status={item.status}
+              currentEpisode={item.current_episode}
+              lastWatchedAt={item.last_watched_at}
+              completedAt={item.completed_at}
+              originalCompletedAt={item.original_completed_at}
+              startedAt={item.started_at}
+              tab="backlog"
+              onCommit={(payload) => handleStatusChange(item as ActiveItem, payload)}
+            >
+              <ListRow
+                anime={item.anime}
+                subtitle={item.status}
+                onMenuPress={() => handleInfo(item.anime_id, item.anime?.title)}
+              />
+            </MyListSwipeRow>
+          </Animated.View>
         )}
         keyExtractor={(item) => item.anime_id}
         contentContainerStyle={styles.rowList}
@@ -283,23 +289,29 @@ export const MyListScreen = () => {
     return (
       <FlatList
         data={items}
-        renderItem={({ item }) => (
-          <MyListSwipeRow
-            status={item.status}
-            currentEpisode={item.current_episode}
-            lastWatchedAt={item.last_watched_at}
-            completedAt={item.completed_at}
-            originalCompletedAt={item.original_completed_at}
-            startedAt={item.started_at}
-            tab="archive"
-            onCommit={(payload) => handleStatusChange(item as ActiveItem, payload)}
+        renderItem={({ item, index }) => (
+          <Animated.View
+            entering={index < 8
+              ? FadeInDown.delay(index * 45).duration(220).easing(Easing.bezier(0.25, 0.1, 0.25, 1))
+              : undefined}
           >
-            <ListRow
-              anime={item.anime}
-              subtitle={item.status}
-              onMenuPress={() => handleInfo(item.anime_id, item.anime?.title)}
-            />
-          </MyListSwipeRow>
+            <MyListSwipeRow
+              status={item.status}
+              currentEpisode={item.current_episode}
+              lastWatchedAt={item.last_watched_at}
+              completedAt={item.completed_at}
+              originalCompletedAt={item.original_completed_at}
+              startedAt={item.started_at}
+              tab="archive"
+              onCommit={(payload) => handleStatusChange(item as ActiveItem, payload)}
+            >
+              <ListRow
+                anime={item.anime}
+                subtitle={item.status}
+                onMenuPress={() => handleInfo(item.anime_id, item.anime?.title)}
+              />
+            </MyListSwipeRow>
+          </Animated.View>
         )}
         keyExtractor={(item) => item.anime_id}
         contentContainerStyle={styles.rowList}
@@ -406,23 +418,24 @@ export const MyListScreen = () => {
     // Cards Layout
     if (layoutMode === 'cards') {
       return (
-        <Animated.View
-          entering={FadeIn.duration(200)}
-          exiting={FadeOut.duration(200)}
-          layout={Layout.springify()}
-        >
-          <FlatList
+        <FlatList
             key="cards-layout"
             data={activeAnime}
-            renderItem={({ item }) => (
-              <ActiveCard
-                anime={item.anime}
-                currentEpisode={item.current_episode || 0}
-                totalEpisodes={item.total_episodes}
-                status={item.status}
-                onUpdate={() => handleUpdate(item as ActiveItem)}
-                onInfoPress={() => handleInfo(item.anime_id, item.anime?.title)}
-              />
+            renderItem={({ item, index }) => (
+              <Animated.View
+                entering={index < 8
+                  ? FadeInDown.delay(index * 45).duration(220).easing(Easing.bezier(0.25, 0.1, 0.25, 1))
+                  : undefined}
+              >
+                <ActiveCard
+                  anime={item.anime}
+                  currentEpisode={item.current_episode || 0}
+                  totalEpisodes={item.total_episodes}
+                  status={item.status}
+                  onUpdate={() => handleUpdate(item as ActiveItem)}
+                  onInfoPress={() => handleInfo(item.anime_id, item.anime?.title)}
+                />
+              </Animated.View>
             )}
             keyExtractor={(item) => item.anime_id}
             numColumns={2}
@@ -431,40 +444,40 @@ export const MyListScreen = () => {
             showsVerticalScrollIndicator={false}
             scrollEnabled={false}
           />
-        </Animated.View>
       );
     }
 
     // Rows Layout
     return (
-      <Animated.View
-        entering={FadeIn.duration(200)}
-        exiting={FadeOut.duration(200)}
-        layout={Layout.springify()}
-      >
         <FlatList
           key="rows-layout"
           data={activeAnime}
-          renderItem={({ item }) => (
-            <MyListSwipeRow
-              status={item.status}
-              currentEpisode={item.current_episode}
-              lastWatchedAt={item.last_watched_at}
-              completedAt={item.completed_at}
-              originalCompletedAt={item.original_completed_at}
-              startedAt={item.started_at}
-              tab="active"
-              onCommit={(payload) => handleStatusChange(item as ActiveItem, payload)}
+          renderItem={({ item, index }) => (
+            <Animated.View
+              entering={index < 8
+                ? FadeInDown.delay(index * 45).duration(220).easing(Easing.bezier(0.25, 0.1, 0.25, 1))
+                : undefined}
             >
-              <ActiveRow
-                anime={item.anime}
-                currentEpisode={item.current_episode || 0}
-                totalEpisodes={item.total_episodes}
+              <MyListSwipeRow
                 status={item.status}
-                onUpdatePress={() => handleUpdate(item as ActiveItem)}
-                onInfoPress={() => handleInfo(item.anime_id, item.anime?.title)}
-              />
-            </MyListSwipeRow>
+                currentEpisode={item.current_episode}
+                lastWatchedAt={item.last_watched_at}
+                completedAt={item.completed_at}
+                originalCompletedAt={item.original_completed_at}
+                startedAt={item.started_at}
+                tab="active"
+                onCommit={(payload) => handleStatusChange(item as ActiveItem, payload)}
+              >
+                <ActiveRow
+                  anime={item.anime}
+                  currentEpisode={item.current_episode || 0}
+                  totalEpisodes={item.total_episodes}
+                  status={item.status}
+                  onUpdatePress={() => handleUpdate(item as ActiveItem)}
+                  onInfoPress={() => handleInfo(item.anime_id, item.anime?.title)}
+                />
+              </MyListSwipeRow>
+            </Animated.View>
           )}
           keyExtractor={(item) => item.anime_id}
           contentContainerStyle={styles.rowList}
@@ -472,7 +485,6 @@ export const MyListScreen = () => {
           scrollEnabled={false}
           ItemSeparatorComponent={() => <View style={styles.separator} />}
         />
-      </Animated.View>
     );
   };
 
@@ -513,25 +525,9 @@ export const MyListScreen = () => {
       >
         {selectedTab === 'active' && renderActiveContent()}
 
-        {selectedTab === 'backlog' && (
-          <Animated.View
-            entering={FadeIn.duration(200)}
-            exiting={FadeOut.duration(200)}
-            layout={Layout.springify()}
-          >
-            {renderBacklogContent()}
-          </Animated.View>
-        )}
+        {selectedTab === 'backlog' && renderBacklogContent()}
 
-        {selectedTab === 'archive' && (
-          <Animated.View
-            entering={FadeIn.duration(200)}
-            exiting={FadeOut.duration(200)}
-            layout={Layout.springify()}
-          >
-            {renderArchiveContent()}
-          </Animated.View>
-        )}
+        {selectedTab === 'archive' && renderArchiveContent()}
       </ScrollView>
 
       {/* Episode Picker Modal for Active items */}

@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import Animated, { FadeInDown, FadeInRight, Easing } from 'react-native-reanimated';
 import { View, Text, ScrollView, FlatList, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { rails, featuredLists } from './mockData';
@@ -49,7 +50,7 @@ export default function HomeScreen() {
       <ScrollView contentContainerStyle={{ paddingBottom: 80 }}>
         {/* Continue Watching rail (live data) */}
         {authReady && userId && (
-          <View style={{ paddingHorizontal: 20, paddingTop: 6, paddingBottom: 2 }}>
+          <View style={{ paddingTop: 6, paddingBottom: 2 }}>
             <ContinueWatchingSection userId={userId} limit={3} />
           </View>
         )}
@@ -59,14 +60,20 @@ export default function HomeScreen() {
         </View>
 
         <View style={{ paddingHorizontal:20, gap:12 }}>
-          {rails.map(r=>(
-            <CollectionCard
+          {rails.map((r, index) => (
+            <Animated.View
               key={r.id}
-              title={r.title}
-              subtitle={r.subtitle}
-              tags={r.tags}
-              posters={r.posters}
-            />
+              entering={index < 8
+                ? FadeInDown.delay(index * 45).duration(220).easing(Easing.bezier(0.25, 0.1, 0.25, 1))
+                : undefined}
+            >
+              <CollectionCard
+                title={r.title}
+                subtitle={r.subtitle}
+                tags={r.tags}
+                posters={r.posters}
+              />
+            </Animated.View>
           ))}
         </View>
 
@@ -80,8 +87,14 @@ export default function HomeScreen() {
           keyExtractor={(i)=>i.id}
           contentContainerStyle={{ paddingHorizontal:20, gap:12, paddingBottom:16 }}
           showsHorizontalScrollIndicator={false}
-          renderItem={({ item }) => (
-            <FeaturedListCard title={item.title} creator={item.creator} avatar={item.avatar} images={item.images}/>
+          renderItem={({ item, index }) => (
+            <Animated.View
+              entering={index < 5
+                ? FadeInRight.delay(index * 45).duration(220).easing(Easing.bezier(0.25, 0.1, 0.25, 1))
+                : undefined}
+            >
+              <FeaturedListCard title={item.title} creator={item.creator} avatar={item.avatar} images={item.images}/>
+            </Animated.View>
           )}
         />
       </ScrollView>

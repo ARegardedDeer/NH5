@@ -12,6 +12,7 @@ import { DiscoverScreen } from '../screens/DiscoverScreen';
 // @ts-ignore - Icon library type definitions
 import MaterialIcon from 'react-native-vector-icons/MaterialIcons';
 import { DiscoverStackParamList, MainTabParamList, RootStackParamList } from '../types/navigation';
+import { FadeTabScreen } from '../components/FadeTabScreen';
 
 const DiscoverStack = createNativeStackNavigator<DiscoverStackParamList>();
 function DiscoverStackNavigator() {
@@ -70,19 +71,19 @@ function MainTabs() {
         },
       })}
     >
-      <Tab.Screen name="Home" component={HomeScreen} />
+      <Tab.Screen name="Home" children={() => <FadeTabScreen><HomeScreen /></FadeTabScreen>} />
       <Tab.Screen
         name="Discover"
-        component={DiscoverStackNavigator}
+        children={() => <FadeTabScreen><DiscoverStackNavigator /></FadeTabScreen>}
         listeners={({ navigation }) => ({
           tabPress: () => {
             navigation.navigate('Discover', { screen: 'DiscoverList' });
           },
         })}
       />
-      <Tab.Screen name="My List" component={MyListScreen} />
-      <Tab.Screen name="Community" children={() => <PlaceholderScreen title="Community" />} />
-      <Tab.Screen name="Profile" component={ProfileStackNavigator} />
+      <Tab.Screen name="My List" children={() => <FadeTabScreen><MyListScreen /></FadeTabScreen>} />
+      <Tab.Screen name="Community" children={() => <FadeTabScreen><PlaceholderScreen title="Community" /></FadeTabScreen>} />
+      <Tab.Screen name="Profile" children={() => <FadeTabScreen><ProfileStackNavigator /></FadeTabScreen>} />
     </Tab.Navigator>
   );
 }
@@ -95,8 +96,11 @@ export default function AppNavigator() {
         name="AnimeDetail"
         component={AnimeDetailScreen}
         options={({ route }) => ({
-          title: route.params?.title ?? 'Detail',
-          headerBackTitleVisible: false,
+          headerShown: false,
+          animation: 'slide_from_bottom',
+          gestureEnabled: true,
+          gestureDirection: 'vertical',
+          fullScreenGestureEnabled: true,
         })}
       />
     </RootStack.Navigator>

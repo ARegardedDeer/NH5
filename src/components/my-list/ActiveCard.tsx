@@ -40,7 +40,7 @@ export const ActiveCard: React.FC<ActiveCardProps> = ({
 
   // Calculate progress
   const progress = totalEpisodes
-    ? Math.round((currentEpisode / totalEpisodes) * 100)
+    ? Math.round(((currentEpisode + 1) / totalEpisodes) * 100)
     : null;
 
   // Single episode check (movies/OVAs)
@@ -52,7 +52,7 @@ export const ActiveCard: React.FC<ActiveCardProps> = ({
     if (isSingleEpisode) {
       return 'Movie';
     }
-    return totalEpisodes ? `Ep ${currentEpisode} / ${totalEpisodes}` : `Episode ${currentEpisode}`;
+    return totalEpisodes ? `Ep ${currentEpisode + 1} / ${totalEpisodes}` : `Episode ${currentEpisode + 1}`;
   };
 
   // CTA text

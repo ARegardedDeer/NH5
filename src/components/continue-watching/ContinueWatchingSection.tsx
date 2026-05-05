@@ -1,5 +1,6 @@
 import React, { useState, useCallback } from 'react';
 import { View, Text, FlatList, Pressable, StyleSheet, LayoutAnimation, Platform, UIManager } from 'react-native';
+import Animated, { FadeInRight, Easing } from 'react-native-reanimated';
 import { useQueryClient } from '@tanstack/react-query';
 import { useContinueWatching } from '../../hooks/useContinueWatching';
 import { useUpdateListStatus } from '../../hooks/useUpdateListStatus';
@@ -111,24 +112,26 @@ export const ContinueWatchingSection: React.FC<ContinueWatchingSectionProps> = (
       {/* Horizontal Scrolling List */}
       <FlatList
         data={continueWatching}
-        renderItem={({ item }) => (
-          USE_V2 ? (
-            <ContinueWatchingCardV2
-              anime={item.anime}
-              status={item.status}
-              currentEpisode={item.current_episode}
-              totalEpisodes={item.total_episodes}
-              onContinue={() => handleContinue(item)}
-              onRemove={() => handleRemove(item.anime_id)}
-            />
-          ) : (
-            <ContinueWatchingCard
-              anime={item.anime}
-              currentEpisode={item.current_episode}
-              totalEpisodes={item.total_episodes}
-              onContinue={() => handleContinue(item)}
-            />
-          )
+        renderItem={({ item, index }) => (
+          <Animated.View entering={FadeInRight.delay(index * 45).duration(220).easing(Easing.bezier(0.25, 0.1, 0.25, 1))}>
+            {USE_V2 ? (
+              <ContinueWatchingCardV2
+                anime={item.anime}
+                status={item.status}
+                currentEpisode={item.current_episode}
+                totalEpisodes={item.total_episodes}
+                onContinue={() => handleContinue(item)}
+                onRemove={() => handleRemove(item.anime_id)}
+              />
+            ) : (
+              <ContinueWatchingCard
+                anime={item.anime}
+                currentEpisode={item.current_episode}
+                totalEpisodes={item.total_episodes}
+                onContinue={() => handleContinue(item)}
+              />
+            )}
+          </Animated.View>
         )}
         keyExtractor={(item) => `${item.user_id}-${item.anime_id}`}
         horizontal

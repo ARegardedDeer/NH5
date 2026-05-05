@@ -27,18 +27,18 @@ export const ContinueWatchingCard: React.FC<ContinueWatchingCardProps> = ({
   const navigation = useNavigation<AppNavigationProp>();
 
   // Calculate progress percentage
-  const progress = totalEpisodes ? (currentEpisode / totalEpisodes) * 100 : 0;
+  const progress = totalEpisodes ? ((currentEpisode + 1) / totalEpisodes) * 100 : 0;
 
   // Format episode/season text
   const formatEpisodeText = () => {
     if (anime.season_number && totalEpisodes) {
-      return `S${anime.season_number}: Ep ${currentEpisode}/${totalEpisodes}`;
+      return `S${anime.season_number}: Ep ${currentEpisode + 1}/${totalEpisodes}`;
     }
     if (totalEpisodes) {
-      return `Episode ${currentEpisode}/${totalEpisodes}`;
+      return `Episode ${currentEpisode + 1}/${totalEpisodes}`;
     }
     // Ongoing series (no total episodes)
-    return `Episode ${currentEpisode}`;
+    return `Episode ${currentEpisode + 1}`;
   };
 
   return (

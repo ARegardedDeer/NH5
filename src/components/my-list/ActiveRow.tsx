@@ -39,9 +39,9 @@ export const ActiveRow: React.FC<ActiveRowProps> = ({
       return 'Movie';
     }
     if (status === 'Rewatching') {
-      return `Rewatching • Ep ${currentEpisode}${totalEpisodes ? ` / ${totalEpisodes}` : ''}`;
+      return `Rewatching • Ep ${currentEpisode + 1}${totalEpisodes ? ` / ${totalEpisodes}` : ''}`;
     }
-    return `Ep ${currentEpisode}${totalEpisodes ? ` / ${totalEpisodes}` : ''}`;
+    return `Ep ${currentEpisode + 1}${totalEpisodes ? ` / ${totalEpisodes}` : ''}`;
   };
 
   const handlePress = () => {

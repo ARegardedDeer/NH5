@@ -41,17 +41,17 @@ export const EpisodePickerModal: React.FC<EpisodePickerModalProps> = (props) => 
     onComplete,
   } = props;
   const updateEpisode = useEpisodeUpdate();
-  const [selectedEpisode, setSelectedEpisode] = useState<number>(currentEpisode);
+  const [selectedEpisode, setSelectedEpisode] = useState<number>(currentEpisode + 1);
   const [isEditingInline, setIsEditingInline] = useState(false);
-  const [inlineEpisode, setInlineEpisode] = useState(currentEpisode.toString());
+  const [inlineEpisode, setInlineEpisode] = useState((currentEpisode + 1).toString());
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
 
   const isSingleEpisode = totalEpisodes === 1;
 
   useEffect(() => {
     if (visible) {
-      setSelectedEpisode(currentEpisode);
-      setInlineEpisode(currentEpisode.toString());
+      setSelectedEpisode(currentEpisode + 1);
+      setInlineEpisode((currentEpisode + 1).toString());
       setIsEditingInline(false);
       setHasUnsavedChanges(false);
     }
@@ -71,7 +71,7 @@ export const EpisodePickerModal: React.FC<EpisodePickerModalProps> = (props) => 
     return episodes;
   }, [hasSpecials, totalEpisodes]);
 
-  const isBigJump = (targetEpisode: number) => targetEpisode - currentEpisode > 10;
+  const isBigJump = (targetEpisode: number) => targetEpisode - (currentEpisode + 1) > 10;
 
   const formatEpisodeLabel = (episode: number) =>
     Number.isInteger(episode) ? `Episode ${episode}` : `Episode ${episode} (Special)`;
@@ -86,7 +86,7 @@ export const EpisodePickerModal: React.FC<EpisodePickerModalProps> = (props) => 
         setInlineEpisode(validEpisode.toString());
       } else {
         // Invalid input - reset to current
-        setInlineEpisode(currentEpisode.toString());
+        setInlineEpisode((currentEpisode + 1).toString());
       }
       setIsEditingInline(false);
     } else {
@@ -146,8 +146,8 @@ export const EpisodePickerModal: React.FC<EpisodePickerModalProps> = (props) => 
             style: 'destructive',
             onPress: () => {
               setHasUnsavedChanges(false);
-              setSelectedEpisode(currentEpisode);
-              setInlineEpisode(currentEpisode.toString());
+              setSelectedEpisode(currentEpisode + 1);
+              setInlineEpisode((currentEpisode + 1).toString());
               setIsEditingInline(false);
               onClose();
             },
@@ -179,7 +179,7 @@ export const EpisodePickerModal: React.FC<EpisodePickerModalProps> = (props) => 
     if (isBigJump(episodeToConfirm)) {
       Alert.alert(
         'Jump Ahead?',
-        `You're jumping from Episode ${currentEpisode} to Episode ${episodeToConfirm}.\n\nThis will mark episodes 1-${episodeToConfirm} as watched.`,
+        `You're jumping from Episode ${currentEpisode + 1} to Episode ${episodeToConfirm}.\n\nThis will mark episodes 1-${episodeToConfirm} as watched.`,
         [
           { text: 'Cancel', style: 'cancel' },
           { text: 'Confirm', onPress: () => performUpdate(episodeToConfirm) },
@@ -192,7 +192,7 @@ export const EpisodePickerModal: React.FC<EpisodePickerModalProps> = (props) => 
   };
 
   // Calculate progress percentage
-  const progressPercentage = totalEpisodes ? Math.min((currentEpisode / totalEpisodes) * 100, 100) : 0;
+  const progressPercentage = totalEpisodes ? Math.min(((currentEpisode + 1) / totalEpisodes) * 100, 100) : 0;
 
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={handleClose}>
@@ -255,7 +255,7 @@ export const EpisodePickerModal: React.FC<EpisodePickerModalProps> = (props) => 
                   onChangeText={(value) => {
                     setInlineEpisode(value);
                     const parsed = parseInt(value);
-                    setHasUnsavedChanges(!isNaN(parsed) && parsed !== currentEpisode);
+                    setHasUnsavedChanges(!isNaN(parsed) && parsed !== currentEpisode + 1);
                   }}
                   keyboardType="number-pad"
                   autoFocus
@@ -308,7 +308,7 @@ export const EpisodePickerModal: React.FC<EpisodePickerModalProps> = (props) => 
                 onValueChange={(value) => {
                   setSelectedEpisode(Number(value));
                   setInlineEpisode(value.toString());
-                  setHasUnsavedChanges(Number(value) !== currentEpisode);
+                  setHasUnsavedChanges(Number(value) !== currentEpisode + 1);
                 }}
                 itemStyle={styles.pickerItem}
               >
